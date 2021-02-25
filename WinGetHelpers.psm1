@@ -6,32 +6,26 @@ function Get-WinGetApplication {
     )
     $repositoryUrlRoot = "https://raw.githubusercontent.com/Microsoft/winget-pkgs/master/manifests/"
     $ErrorActionPreference = 'Stop'
-    # try {
-        # Sorry for the mess.
-        # Get the manifest ID and version(Publisher.Name)
-        winget source update
-        $littleManifest = (winget show $packageName)
-        if ($LASTEXITCODE -ne 0) {throw "Couldn't find package $package."}
-        $package = ($littleManifest | Select-Object -Skip 1 | Out-String).Split('[')[1].Split(']')[0]
-        try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-        catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-        # Now we can get the full manifest.
-        $publisher,$appName = $package.Split('.')
-        $manifestFilePath = $repositoryUrlRoot + ($publisher)+ "/" +($appName) + "/" + $version + ".yaml"
-        Write-Host $manifestFilePath
-        $manifest = (Invoke-WebRequest $manifestFilePath).Content | Out-String | ConvertFrom-Yaml
-        $manifest.appName = $appName
-        # Getting around odd manifests. This will probably break when multiple installer types are allowed.
-        if ($null -ne $manifest.Installers.InstallerType) 
-        {
-            $manifest.InstallerType = $manifest.Installers.InstallerType
-        }
-        return $manifest
-    # }
-    # catch {
-        Write-Host "Unable to find manifest for package $packageName."
-        return $null;
-    # }
+    # Sorry for the mess.
+    # Get the manifest ID and version(Publisher.Name)
+    winget source update
+    $littleManifest = (winget show $packageName)
+    if ($LASTEXITCODE -ne 0) {throw "Couldn't find package $package."}
+    $package = ($littleManifest | Select-Object -Skip 1 | Out-String).Split('[')[1].Split(']')[0]
+    try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+    catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+    # Now we can get the full manifest.
+    $publisher,$appName = $package.Split('.')
+    $manifestFilePath = $repositoryUrlRoot + ($publisher)+ "/" +($appName) + "/" + $version + ".yaml"
+    Write-Host $manifestFilePath
+    $manifest = (Invoke-WebRequest $manifestFilePath).Content | Out-String | ConvertFrom-Yaml
+    $manifest.appName = $appName
+    # Getting around odd manifests. This will probably break when multiple installer types are allowed.
+    if ($null -ne $manifest.Installers.InstallerType) 
+    {
+      $manifest.InstallerType = $manifest.Installers.InstallerType
+    }
+    return $manifest
 }
 function Get-URLFileHash {
     param (
@@ -165,6 +159,11 @@ function Update-WinGetManifest {
     Write-Host $fileName " written."
     winget validate $fileName
     if ($runSandbox) {
-        Start-WinGetSandbox (".\" + $content.Version + ".yaml")
+        try {
+          Start-WinGetSandbox (".\" + $content.Version + ".yaml")
+        }
+        catch {
+          Write-Host "For -runSandbox to work, you need the Start-WinGetSandbox cmdlet. Check microsoft/winget-pkgs#827 for more information."
+        }
     }
 }
