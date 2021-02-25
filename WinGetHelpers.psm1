@@ -143,7 +143,7 @@ function Update-WinGetManifest {
     }
     else {
         Write-Host "What is the Installer URL for the new version?"
-        Read-Host $content.Installers[0].Url
+        $content.Installers[0].Url = Read-Host $content.Installers[0].Url
     }
     # Get hash.
     $ProgressPreference = 'SilentlyContinue' 
