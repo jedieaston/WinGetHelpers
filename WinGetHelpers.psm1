@@ -34,7 +34,7 @@ function Get-URLFileHash {
         )
     $ProgressPreference = 'SilentlyContinue' 
     $ErrorActionPreference = 'Stop'
-    Invoke-WebRequest -UseBasicParsing -OutFile fart $url
+    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $url
     $hash = Get-FileHash $env:TEMP\fart
     Remove-Item $env:TEMP\fart
     Write-Host "The hash for the file at " $url "is "$hash.hash
@@ -50,7 +50,7 @@ function Get-WinGetManifestInstallerHash {
   $ErrorActionPreference = 'Stop'
   $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
   $ProgressPreference = 'SilentlyContinue' 
-  Invoke-WebRequest -UseBasicParsing -OutFile fart $url
+  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $url
   $hash = Get-FileHash $env:TEMP\fart
   Remove-Item $env:TEMP\fart
   Write-Host "The hash for the file at " $url "is "$hash.hash
@@ -79,8 +79,8 @@ function Assert-WinGetManifestStatus {
   }
   try {
     $ProgressPreference = 'SilentlyContinue' 
-    Invoke-WebRequest -UseBasicParsing -OutFile fart $manifest.Installers.Url
-    $hash = (Get-FileHash .\fart).Hash.ToLower()
+    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $manifest.Installers.Url
+    $hash = (Get-FileHash $env:TEMP\fart).Hash.ToLower()
     if ($hash -ne (($manifest.Installers.Sha256).ToLower())) {
       Write-Host "$id hash does not match installer hash."
       Write-Host "hash is: " $hash.ToUpper()
@@ -88,7 +88,7 @@ function Assert-WinGetManifestStatus {
     else {
       Write-Host "$id hash matches installer hash!"
     }
-    Remove-Item .\fart
+    Remove-Item $env:TEMP\fart
   }
   catch {
     Write-Host "unable to verify hash for $id ."
@@ -105,10 +105,10 @@ function Get-WinGetManifestProductCode {
   Import-Module 'Carbon'
   $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
   $ProgressPreference = 'SilentlyContinue' 
-  Invoke-WebRequest -UseBasicParsing -OutFile fart $url
-  $out = ((Get-MSI .\fart).ProductCode).ToString()
+  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $url
+  $out = ((Get-MSI $env:TEMP\fart).ProductCode).ToString()
   write-host $out
-  Remove-Item .\fart
+  Remove-Item $env:TEMP\fart
   $outPretty = "{" + $out.ToUpper() + "}"
   Write-Host "The product code for " $manifest " is " $outPretty "."
   Write-Host "It's in your clipboard."
