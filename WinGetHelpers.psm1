@@ -1,9 +1,11 @@
-function Get-WingetApplication {
+#Requires -Module Carbon
+function Get-WinGetApplication {
     param (
         [Parameter(Mandatory = $true)]
         [string]$packageName
     )
     $repositoryUrlRoot = "https://raw.githubusercontent.com/Microsoft/winget-pkgs/master/manifests/"
+    $ErrorActionPreference = 'Stop'
     # try {
         # Sorry for the mess.
         # Get the manifest ID and version(Publisher.Name)
@@ -37,6 +39,7 @@ function Get-URLFileHash {
         [string]$url
         )
     $ProgressPreference = 'SilentlyContinue' 
+    $ErrorActionPreference = 'Stop'
     Invoke-WebRequest -UseBasicParsing -OutFile fart $url
     $hash = Get-FileHash $env:TEMP\fart
     Remove-Item $env:TEMP\fart
@@ -45,11 +48,12 @@ function Get-URLFileHash {
     Write-Host "It has been written to the clipboard."
 }
 
-function Get-ManifestInstallerHash {
+function Get-WinGetManifestInstallerHash {
   Param(
    [Parameter(mandatory=$true, Position = 0, HelpMessage = "The Manifest to get hash for.")]
    [String] $manifest
   )
+  $ErrorActionPreference = 'Stop'
   $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
   $ProgressPreference = 'SilentlyContinue' 
   Invoke-WebRequest -UseBasicParsing -OutFile fart $url
@@ -66,13 +70,14 @@ function Get-GitHubReleases {
    [Parameter(mandatory=$true, Position = 0, HelpMessage = "The repository to get the releases for, in the form user/repo.")]
    [String] $repo
   )
-  $env:GH_REPO=$repo; gh release list -L 5; rm env:\GH_REPO
+  $env:GH_REPO=$repo; gh release list -L 5; Remove-Item env:\GH_REPO
 }
-function Assert-WinGetAppStatus {
+function Assert-WinGetManifestStatus {
   param (
     [Parameter(Mandatory=$true)]
     [string]$id
   )
+  $ErrorActionPreference = 'Stop'
   $manifest = Get-WingetApplication $id
   if ($null -eq $manifest)
   {
@@ -95,27 +100,28 @@ function Assert-WinGetAppStatus {
     Write-Host "unable to verify hash for $id ."
   }
 }
-function Get-ManifestProductCode {
+function Get-WinGetManifestProductCode {
   # Carbon must be installed for this to work!
   # Vars
   Param(
    [Parameter(mandatory=$true, Position = 0, HelpMessage = "The Manifest to get product code for.")]
    [String] $manifest
   )
+  $ErrorActionPreference = 'Stop'
   Import-Module 'Carbon'
   $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
   $ProgressPreference = 'SilentlyContinue' 
   Invoke-WebRequest -UseBasicParsing -OutFile fart $url
   $out = ((Get-MSI .\fart).ProductCode).ToString()
   write-host $out
-  rm .\fart
+  Remove-Item .\fart
   $outPretty = "{" + $out.ToUpper() + "}"
   Write-Host "The product code for " $manifest " is " $outPretty "."
   Write-Host "It's in your clipboard."
   Set-Clipboard $outPretty
 }
 
-function Update-Manifest {
+function Update-WinGetManifest {
     param (
         [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to update.")]
         [string] $manifest,
