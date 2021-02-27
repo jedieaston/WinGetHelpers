@@ -414,7 +414,7 @@ function Test-WinGetManifest {
   Start-WinGetSandbox $manifest -auto
   Write-Host "Waiting for installation of" $manifest "to complete."
   while ((Test-Path -PathType Leaf ".\done") -ne $true) {
-      Write-Host "Waiting for file..."
+      # Write-Host "Waiting for file..."
       Start-Sleep -s 5
       if ($noStop -ne $true) {
         $howManySeconds += 5
