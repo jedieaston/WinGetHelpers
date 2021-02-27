@@ -413,7 +413,8 @@ function Test-WinGetManifest {
   $howManySeconds = 0
   Start-WinGetSandbox $manifest -auto
   Write-Host "Waiting for installation of" $manifest "to complete."
-  while ((([System.IO.File]::Exists(".\done")) -ne $true)) {
+  while ((Test-Path -PathType Leaf ".\done") -ne $true) {
+      Write-Host "Waiting for file..."
       Start-Sleep -s 5
       if ($noStop -ne $true) {
         $howManySeconds += 5
@@ -500,14 +501,32 @@ function Update-WinGetManifest {
     winget validate $fileName
     if ($test) {
        Start-WinGetSandbox $fileName
+       return $true
     }
     elseif ($silentTest) {
       $testSuccess = Test-WinGetManifest $fileName
       if ($testSuccess) {
         Write-Host "Manifest successfully installed in Windows Sandbox!"
+        return $true
       }
       else {
         Write-Host "Manifest install failed/timed out. For more info check .\tmp.log."
+        return $false
       }
     }
+    else {
+      return $true
+    }
+}
+function New-WinGetCommit {
+  # Don't use this unless you're really lazy.
+  param(
+    [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to commit.")]
+    [string] $manifest
+  )
+  $ErrorActionPreference = "Stop"
+  $content = Get-Content $manifest | ConvertFrom-Yaml
+  $commitMessage = "Added " + $content.name + " version " + $content.Version + "."
+  git add "$manifest"
+  git commit -m $commitMessage
 }
