@@ -125,7 +125,8 @@ function Update-WinGetManifest {
         [string] $newURL,
         [switch] $productCode,
         [switch] $runSandbox,
-        [switch] $autoReplaceURL
+        [switch] $autoReplaceURL,
+        [switch] $overwrite
     )
     Import-Module 'Carbon'
     $ProgressPreference = "SilentlyContinue"
@@ -133,7 +134,7 @@ function Update-WinGetManifest {
     $content = Get-Content $manifest | ConvertFrom-Yaml -Ordered
     $oldVersion = $content.Version
     $content.Version = $newVersion
-    if ($autoReplaceURL) {
+    if ($autoReplaceURL -and ($oldVersion -ne "latest")) {
         $content.Installers[0].Url = $content.Installers[0].Url -replace  $oldVersion, $newVersion
         
         Write-Host "Auto replaced URL resulted in: " $content.Installers[0].Url
@@ -155,7 +156,11 @@ function Update-WinGetManifest {
     }
     $content | ConvertTo-Yaml | Write-Host
     $fileName =  (".\" + $content.Version + ".yaml")
-    ($content | ConvertTo-Yaml).replace("'", '"') | Out-File -FilePath $fileName -NoClobber
+    if ($overwrite) {
+      # Delete the old manifest, we're overwriting!
+      Remove-Item $manifest
+    }
+    ($content | ConvertTo-Yaml).replace("'", '"') | Out-File -FilePath $fileName
     Write-Host $fileName " written."
     winget validate $fileName
     if ($runSandbox) {
