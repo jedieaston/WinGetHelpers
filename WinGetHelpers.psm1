@@ -147,6 +147,7 @@ function Update-WinGetManifest {
         $content.Installers[0].Url = Read-Host $content.Installers[0].Url
     }
     # Get hash.
+    Write-Host "Downloading installer, please stand by..."
     $ProgressPreference = 'SilentlyContinue' 
     Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $content.Installers[0].Url
     $content.Installers[0].Sha256 = (Get-FileHash $env:TEMP\fart).Hash
