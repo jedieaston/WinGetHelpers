@@ -1,4 +1,288 @@
 #Requires -Module Carbon
+function Start-WinGetSandbox {
+  # The reason why this function so good is because I didn't write it, Felipe Santos (@felipecrs) did.
+  # I added a couple helper parameters for the rest of this module, which is why this is here. 
+  # Parse arguments
+
+  Param(
+    [Parameter(Position = 0, HelpMessage = "The Manifest to install in the Sandbox.")]
+    [String] $Manifest,
+    [Parameter(Position = 1, HelpMessage = "The script to run in the Sandbox.")]
+    [ScriptBlock] $Script,
+    [Parameter(HelpMessage = "The folder to map in the Sandbox.")]
+    [String] $MapFolder = $pwd,
+    [Parameter(HelpMessage = "Automatically run manifest and send output to file.")]
+    [Switch] $auto
+  )
+
+  $ErrorActionPreference = "Stop"
+
+  $mapFolder = (Resolve-Path -Path $MapFolder).Path
+
+  if (-Not (Test-Path -Path $mapFolder -PathType Container)) {
+    Write-Error -Category InvalidArgument -Message 'The provided MapFolder is not a folder.'
+  }
+
+  # Validate manifest file
+
+  if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
+    Write-Host '--> Validating Manifest'
+
+    if (-Not (Test-Path -Path $Manifest -PathType Leaf)) {
+      throw 'The Manifest file does not exist.'
+    }
+
+    winget.exe validate $Manifest
+    if (-Not $?) {
+      throw 'Manifest validation failed.'
+    }
+
+    Write-Host
+  }
+
+  # Check if Windows Sandbox is enabled
+
+  if (-Not (Get-Command 'WindowsSandbox' -ErrorAction SilentlyContinue)) {
+    Write-Error -Category NotInstalled -Message @'
+Windows Sandbox does not seem to be available. Check the following URL for prerequisites and further details:
+https://docs.microsoft.com/en-us/windows/security/threat-protection/windows-sandbox/windows-sandbox-overview
+You can run the following command in an elevated PowerShell for enabling Windows Sandbox:
+$ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClientVM'
+'@
+  }
+
+  # Close Windows Sandbox
+
+  $sandbox = Get-Process 'WindowsSandboxClient' -ErrorAction SilentlyContinue
+  if ($sandbox) {
+    Write-Host '--> Closing Windows Sandbox'
+
+    $sandbox | Stop-Process
+    Start-Sleep -Seconds 5
+
+    Write-Host
+  }
+  Remove-Variable sandbox
+
+  # Set dependencies
+
+  $desktopAppInstaller = @{
+    fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
+    url      = 'https://github.com/microsoft/winget-cli/releases/download/v-0.2.10191-preview/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
+    hash     = '2B521E128D7FB368A685432EFE6864473857183C9A886E5725EA32B6C84AF8E1'
+  }
+
+  $vcLibs = @{
+    fileName = 'Microsoft.VCLibs.140.00_14.0.27810.0_x64__8wekyb3d8bbwe.Appx'
+    url      = 'https://raw.githubusercontent.com/felipecassiors/winget-pkgs/da8548d90369eb8f69a4738dc1474caaffb58e12/Tools/SandboxTest_Temp/Microsoft.VCLibs.140.00_14.0.27810.0_x64__8wekyb3d8bbwe.Appx'
+    hash     = 'fe660c46a3ff8462d9574902e735687e92eeb835f75ec462a41ef76b54ef13ed'
+  }
+
+  $vcLibsUwp = @{
+    fileName = 'Microsoft.VCLibs.x64.14.00.Desktop.appx'
+    url      = 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx'
+    hash     = '6602159c341bafea747d0edf15669ac72df8817299fbfaa90469909e06794256'
+  }
+  $settingsFile = @{
+    fileName = 'settings.json'
+    url      = 'https://gist.github.com/jedieaston/28db9c14a50f18bc9731a14b2b1fd265/raw/a2b117acae3ecdf0fd25f71bda7b3fc0af9921be/settings.json'
+    hash     = '30DEFCF69EDAA7724FDBDDEBCA0CAD4BC027DDE0C2D349B7414972571EBAB94E'
+  }
+
+  $dependencies = @($desktopAppInstaller, $vcLibs, $vcLibsUwp, $settingsFile)
+
+  # Initialize Temp Folder
+
+  $tempFolderName = 'SandboxTest'
+  $tempFolder = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath $tempFolderName
+
+  New-Item $tempFolder -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
+
+  Get-ChildItem $tempFolder -Recurse -Exclude $dependencies.fileName | Remove-Item -Force
+
+  if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
+    Copy-Item -Path $Manifest -Destination $tempFolder
+  }
+
+  # Download dependencies
+
+  Write-Host '--> Downloading dependencies'
+
+  $desktopInSandbox = 'C:\Users\WDAGUtilityAccount\Desktop'
+
+  $WebClient = New-Object System.Net.WebClient
+  foreach ($dependency in $dependencies) {
+    $dependency.file = Join-Path -Path $tempFolder -ChildPath $dependency.fileName
+    $dependency.pathInSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Join-Path -Path $tempFolderName -ChildPath $dependency.fileName)
+
+    # Only download if the file does not exist, or its hash does not match.
+    if (-Not ((Test-Path -Path $dependency.file -PathType Leaf) -And $dependency.hash -eq $(get-filehash $dependency.file).Hash)) {
+      Write-Host @"
+    - Downloading:
+      $($dependency.url)
+"@
+
+      try {
+        $WebClient.DownloadFile($dependency.url, $dependency.file)
+      }
+      catch {
+        throw "Error downloading $($dependency.url) ."
+      }
+      if (-not ($dependency.hash -eq $(get-filehash $dependency.file).Hash)) {
+        throw 'Hashes do not match, try gain.'
+      }
+    }
+  }
+
+  Write-Host
+
+  # Create Bootstrap script
+
+  # See: https://stackoverflow.com/a/14382047/12156188
+  $bootstrapPs1Content = @'
+function Update-Environment {
+  $locations = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
+               'HKCU:\Environment'
+  $locations | ForEach-Object {
+    $k = Get-Item $_
+    $k.GetValueNames() | ForEach-Object {
+      $name  = $_
+      $value = $k.GetValue($_)
+      if ($userLocation -and $name -ieq 'PATH') {
+        $Env:Path += ";$value"
+      } else {
+        Set-Item -Path Env:$name -Value $value
+      }
+    }
+    $userLocation = $true
+  }
+}
+'@
+
+  $bootstrapPs1Content += @"
+Write-Host @'
+--> Installing WinGet
+'@
+Add-AppxPackage -Path '$($desktopAppInstaller.pathInSandbox)' -DependencyPath '$($vcLibsUwp.pathInSandbox)'
+Copy-Item '$($settingsFile.pathInSandbox)' 'C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json'
+Write-Host @'
+Tip: you can type 'Update-Environment' to update your environment variables, such as after installing a new software.
+'@
+"@
+
+  if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
+    $manifestFileName = Split-Path $Manifest -Leaf
+    $manifestPathInSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Join-Path -Path $tempFolderName -ChildPath $manifestFileName)
+    if ($auto) {
+      $bootstrapPs1Content += @"
+Write-Host @'
+--> Installing the Manifest $manifestFileName
+'@
+winget install -m '$manifestPathInSandbox' | Out-File .\tmp.log
+Write-Host @'
+--> Refreshing environment variables
+'@
+Update-Environment;
+Write-Host @'
+--> Getting list of installed applications...
+'@
+winget list | Add-Content .\tmp.log; 
+New-Item .\done;
+"@
+    }
+    else {
+      $bootstrapPs1Content += @"
+Write-Host @'
+--> Installing the Manifest $manifestFileName
+'@
+winget install -m '$manifestPathInSandbox'
+Write-Host @'
+--> Refreshing environment variables
+'@
+Update-Environment;
+Write-Host @'
+--> Getting list of installed applications...
+'@
+winget list;
+"@
+    }
+  }
+
+  if (-Not [String]::IsNullOrWhiteSpace($Script)) {
+    $bootstrapPs1Content += @"
+Write-Host @'
+--> Running the following script:
+{
+$Script
+}
+'@
+$Script
+"@
+  }
+
+  $bootstrapPs1Content += @"
+Write-Host
+"@
+
+  $bootstrapPs1FileName = 'Bootstrap.ps1'
+  $bootstrapPs1Content | Out-File (Join-Path -Path $tempFolder -ChildPath $bootstrapPs1FileName)
+
+  # Create Wsb file
+
+  $bootstrapPs1InSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Join-Path -Path $tempFolderName -ChildPath $bootstrapPs1FileName)
+  $mapFolderInSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Split-Path -Path $mapFolder -Leaf)
+
+  $sandboxTestWsbContent = @"
+<Configuration>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>$tempFolder</HostFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>$mapFolder</HostFolder>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+  <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$mapFolderInSandbox' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $bootstrapPs1InSandbox'</Command>
+  </LogonCommand>
+</Configuration>
+"@
+
+  $sandboxTestWsbFileName = 'SandboxTest.wsb'
+  $sandboxTestWsbFile = Join-Path -Path $tempFolder -ChildPath $sandboxTestWsbFileName
+  $sandboxTestWsbContent | Out-File $sandboxTestWsbFile
+
+  Write-Host @"
+--> Starting Windows Sandbox, and:
+    - Mounting the following directories:
+      - $tempFolder as read-only
+      - $mapFolder as read-and-write
+    - Installing WinGet
+"@
+
+  if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
+    Write-Host @"
+    - Installing the Manifest $manifestFileName
+    - Refreshing environment variables
+    - Getting a list of installed applications and their product codes
+"@
+  }
+
+  if (-Not [String]::IsNullOrWhiteSpace($Script)) {
+    Write-Host @"
+    - Running the following script:
+{
+$Script
+}
+"@
+  }
+
+  Write-Host
+
+  WindowsSandbox $SandboxTestWsbFile  
+
+}
 function Get-WinGetApplication {
     param (
         [Parameter(Mandatory = $true)]
@@ -114,7 +398,56 @@ function Get-WinGetManifestProductCode {
   Write-Host "It's in your clipboard."
   Set-Clipboard $outPretty
 }
+function Test-WinGetManifest {
+  Param(
+ [Parameter(mandatory=$true, Position = 0, HelpMessage = "The Manifest to test.")]
+ [String] $manifest,
+ [Parameter(HelpMessage="Keep the log file no matter what.")]
+ [Switch]$keepLog,
+ [Parameter(HelpMessage="Don't stop the function after 10 minutes.")]
+ [Switch]$noStop
+) 
+  $ErrorActionPreference = 'Stop'
+  Remove-Item ".\tmp.log" -ErrorAction "SilentlyContinue"
+  Remove-Item ".\done" -ErrorAction "SilentlyContinue"
+  $howManySeconds = 0
+  Start-WinGetSandbox $manifest -auto
+  Write-Host "Waiting for installation of" $manifest "to complete."
+  while ((([System.IO.File]::Exists(".\done")) -ne $true)) {
+      Start-Sleep -s 5
+      if ($noStop -ne $true) {
+        $howManySeconds += 5
+        if ($howManySeconds -ge 610) {
+           Write-Host "Script timed out after 10 minutes. The sandbox will continue, but I'll stop looking for the log file."
+           Write-Host "Next time, try the -noStop parameter or fix your manifest :D"
+           return $false
+        }
+    }
+  }
+  Remove-Item ".\done" -ErrorAction "SilentlyContinue"
 
+  $str = Select-String -Path ".\tmp.log" -Pattern "Successfully installed"
+  if ($null -ne $str) {
+      $sandbox = Get-Process 'WindowsSandboxClient' -ErrorAction SilentlyContinue
+      if ($sandbox) {
+          Write-Host '--> Closing Windows Sandbox'
+
+          $sandbox | Stop-Process
+          Start-Sleep -Seconds 5
+
+          Write-Host
+          Remove-Variable sandbox
+      }
+      if ($keepLog -ne $true) {
+          Remove-Item ".\tmp.log"
+      }
+      return $true
+  }
+  else {
+      Get-Content ".\tmp.log"
+      return $false
+  }
+}
 function Update-WinGetManifest {
     param (
         [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to update.")]
@@ -124,7 +457,8 @@ function Update-WinGetManifest {
         [Parameter(mandatory=$false, Position=2, HelpMessage="The URL for the new installer.")]
         [string] $newURL,
         [switch] $productCode,
-        [switch] $runSandbox,
+        [switch] $test,
+        [switch] $silentTest,
         [switch] $autoReplaceURL,
         [switch] $overwrite
     )
@@ -164,12 +498,16 @@ function Update-WinGetManifest {
     ($content | ConvertTo-Yaml).replace("'", '"') | Out-File -FilePath $fileName
     Write-Host $fileName " written."
     winget validate $fileName
-    if ($runSandbox) {
-        try {
-          Start-WinGetSandbox (".\" + $content.Version + ".yaml")
-        }
-        catch {
-          Write-Host "For -runSandbox to work, you need the Start-WinGetSandbox cmdlet. Check microsoft/winget-pkgs#827 for more information."
-        }
+    if ($test) {
+       Start-WinGetSandbox $fileName
+    }
+    elseif ($silentTest) {
+      $testSuccess = Test-WinGetManifest $fileName
+      if ($testSuccess) {
+        Write-Host "Manifest successfully installed in Windows Sandbox!"
+      }
+      else {
+        Write-Host "Manifest install failed/timed out. For more info check .\tmp.log."
+      }
     }
 }
