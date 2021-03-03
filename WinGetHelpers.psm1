@@ -415,11 +415,11 @@ function Test-WinGetManifest {
   Write-Host "Waiting for installation of" $manifest "to complete."
   while ((Test-Path -PathType Leaf ".\done") -ne $true) {
       # Write-Host "Waiting for file..."
-      Start-Sleep -s 5
+      Start-Sleep -s 1
       if ($noStop -ne $true) {
-        $howManySeconds += 5
-        if ($howManySeconds -ge 610) {
-           Write-Host "Script timed out after 10 minutes. The sandbox will continue, but I'll stop looking for the log file."
+        $howManySeconds += 1
+        if ($howManySeconds -ge 1800) {
+           Write-Host "Script timed out after 30 minutes. The sandbox will continue, but I'll stop looking for the log file."
            Write-Host "Next time, try the -noStop parameter or fix your manifest :D"
            return $false
         }
@@ -434,7 +434,7 @@ function Test-WinGetManifest {
           Write-Host '--> Closing Windows Sandbox'
 
           $sandbox | Stop-Process
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 3
 
           Write-Host
           Remove-Variable sandbox
