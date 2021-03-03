@@ -404,7 +404,7 @@ function Test-WinGetManifest {
  [String] $manifest,
  [Parameter(HelpMessage="Keep the log file no matter what.")]
  [Switch]$keepLog,
- [Parameter(HelpMessage="Don't stop the function after 10 minutes.")]
+ [Parameter(HelpMessage="Don't stop the function after 30 minutes.")]
  [Switch]$noStop
 ) 
   $ErrorActionPreference = 'Stop'
@@ -496,7 +496,7 @@ function Update-WinGetManifest {
       # Delete the old manifest, we're overwriting!
       Remove-Item $manifest
     }
-    ($content | ConvertTo-Yaml).replace("'", '"') | Out-File -FilePath $fileName
+    ($content | ConvertTo-Yaml).replace("'", '"') | Out-File -FilePath $fileName -Encoding utf8
     Write-Host $fileName " written."
     winget validate $fileName
     if ($test) {
