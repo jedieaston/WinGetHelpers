@@ -318,9 +318,9 @@ function Get-URLFileHash {
         )
     $ProgressPreference = 'SilentlyContinue' 
     $ErrorActionPreference = 'Stop'
-    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $url
-    $hash = Get-FileHash $env:TEMP\fart
-    Remove-Item $env:TEMP\fart
+    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
+    $hash = Get-FileHash $env:TEMP\installer
+    Remove-Item $env:TEMP\installer
     Write-Host "The hash for the file at " $url "is "$hash.hash
     Set-Clipboard $hash.hash
     Write-Host "It has been written to the clipboard."
@@ -334,9 +334,9 @@ function Get-WinGetManifestInstallerHash {
   $ErrorActionPreference = 'Stop'
   $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
   $ProgressPreference = 'SilentlyContinue' 
-  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $url
-  $hash = Get-FileHash $env:TEMP\fart
-  Remove-Item $env:TEMP\fart
+  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
+  $hash = Get-FileHash $env:TEMP\installer
+  Remove-Item $env:TEMP\installer
   Write-Host "The hash for the file at " $url "is "$hash.hash
   Set-Clipboard $hash.hash
   Write-Host "It has been written to the clipboard."
@@ -363,8 +363,8 @@ function Assert-WinGetManifestStatus {
   }
   try {
     $ProgressPreference = 'SilentlyContinue' 
-    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $manifest.Installers.Url
-    $hash = (Get-FileHash $env:TEMP\fart).Hash.ToLower()
+    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $manifest.Installers.Url
+    $hash = (Get-FileHash $env:TEMP\installer).Hash.ToLower()
     if ($hash -ne (($manifest.Installers.Sha256).ToLower())) {
       Write-Host "$id hash does not match installer hash."
       Write-Host "hash is: " $hash.ToUpper()
@@ -372,7 +372,7 @@ function Assert-WinGetManifestStatus {
     else {
       Write-Host "$id hash matches installer hash!"
     }
-    Remove-Item $env:TEMP\fart
+    Remove-Item $env:TEMP\installer
   }
   catch {
     Write-Host "unable to verify hash for $id ."
@@ -389,10 +389,10 @@ function Get-WinGetManifestProductCode {
   Import-Module 'Carbon'
   $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
   $ProgressPreference = 'SilentlyContinue' 
-  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $url
-  $out = ((Get-MSI $env:TEMP\fart).ProductCode).ToString()
+  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
+  $out = ((Get-MSI $env:TEMP\installer).ProductCode).ToString()
   write-host $out
-  Remove-Item $env:TEMP\fart
+  Remove-Item $env:TEMP\installer
   $outPretty = "{" + $out.ToUpper() + "}"
   Write-Host "The product code for " $manifest " is " $outPretty "."
   Write-Host "It's in your clipboard."
@@ -484,11 +484,11 @@ function Update-WinGetManifest {
     # Get hash.
     Write-Host "Downloading installer, please stand by..."
     $ProgressPreference = 'SilentlyContinue' 
-    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\fart $content.Installers[0].Url
-    $content.Installers[0].Sha256 = (Get-FileHash $env:TEMP\fart).Hash
+    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $content.Installers[0].Url
+    $content.Installers[0].Sha256 = (Get-FileHash $env:TEMP\installer).Hash
     # Get Product Code if necessary.
     if ($productCode) {
-        $content.Installers[0].ProductCode = '{' + (((Get-MSI $env:TEMP\fart).ProductCode).ToString()).ToUpper() + '}'
+        $content.Installers[0].ProductCode = '{' + (((Get-MSI $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
     }
     $content | ConvertTo-Yaml | Write-Host
     $fileName =  (".\" + $content.Version + ".yaml")
@@ -519,14 +519,22 @@ function Update-WinGetManifest {
     }
 }
 function New-WinGetCommit {
-  # Don't use this unless you're really lazy.
+  # Autocreates a new commit. Don't use this unless you're really lazy.
+  # Make sure that you have an upstream branch set too (to microsoft/winget-pkgs), or creating a new branch may fail.
   param(
     [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to commit.")]
-    [string] $manifest
+    [string] $manifest,
+    [Parameter(HelpMessage="Use the currently checked out branch, instead of making a new one.")]
+    [switch] $currentBranch
   )
   $ErrorActionPreference = "Stop"
   $content = Get-Content $manifest | ConvertFrom-Yaml
   $commitMessage = "Added " + $content.name + " version " + $content.Version + "."
+  if (-Not $currentBranch) {
+    $branchName = $content.id + "-" + $content.Version
+    git fetch --all
+    git checkout -b "$branchName" upstream/master
+  }
   git add "$manifest"
   git commit -m $commitMessage
 }
