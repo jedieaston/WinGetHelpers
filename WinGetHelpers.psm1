@@ -450,6 +450,8 @@ function Test-WinGetManifest {
   }
 }
 function Update-WinGetManifest {
+    # Using the passed parameters, creates a new manifest from an old one to add an application that was updated.
+    # Most should be self explanatory.
     param (
         [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to update.")]
         [string] $manifest,
@@ -457,11 +459,14 @@ function Update-WinGetManifest {
         [string] $newVersion,
         [Parameter(mandatory=$false, Position=2, HelpMessage="The URL for the new installer.")]
         [string] $newURL,
+        [Parameter(HelpMessage="If it is an MSI, get the Product Code and add it to the manifest.")]
         [switch] $productCode,
         [switch] $test,
         [switch] $silentTest,
         [switch] $autoReplaceURL,
-        [switch] $overwrite
+        [switch] $overwrite,
+        [Parameter(HelpMessage="Commit if the manifest installs successfully.")]
+        [switch] $commit
     )
     Import-Module 'Carbon'
     $ProgressPreference = "SilentlyContinue"
@@ -507,6 +512,9 @@ function Update-WinGetManifest {
       $testSuccess = Test-WinGetManifest $fileName
       if ($testSuccess) {
         Write-Host "Manifest successfully installed in Windows Sandbox!"
+        if ($commit) {
+          New-WinGetCommit $fileName
+        }
         return $true
       }
       else {
