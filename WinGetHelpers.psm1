@@ -428,7 +428,7 @@ function Test-WinGetManifest {
   Remove-Item ".\done" -ErrorAction "SilentlyContinue"
 
   $str = Select-String -Path ".\tmp.log" -Pattern "Successfully installed"
-  if ($null -ne $str) {
+  if (-Not [string]::IsNullOrEmpty($str)) {
       $sandbox = Get-Process 'WindowsSandboxClient' -ErrorAction SilentlyContinue
       if ($sandbox) {
           Write-Host '--> Closing Windows Sandbox'
@@ -445,7 +445,9 @@ function Test-WinGetManifest {
       return $true
   }
   else {
-      Get-Content ".\tmp.log"
+      $err = (Select-String -Path ".\tmp.log" -Pattern "Installer failed" | Select-Object Line).Line
+      Write-Host "Uh-oh! $err. The sandbox will stay open so you can investigate."
+      # Get-Content ".\tmp.log"
       return $false
   }
 }
@@ -533,11 +535,18 @@ function New-WinGetCommit {
     [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to commit.")]
     [string] $manifest,
     [Parameter(HelpMessage="Use the currently checked out branch, instead of making a new one.")]
-    [switch] $currentBranch
+    [switch] $currentBranch,
+    [Parameter(HelpMessage="The commit message, if you don't want the automatically generated one.")]
+    [string] $customMessage
   )
   $ErrorActionPreference = "Stop"
   $content = Get-Content $manifest | ConvertFrom-Yaml
-  $commitMessage = "Added " + $content.name + " version " + $content.Version + "."
+  if([string]::IsNullOrEmpty($customMessage) -or [string]::IsNullOrWhiteSpace($customMessage)) {
+   $commitMessage = "Added " + $content.name + " version " + $content.Version + "."
+  }
+  else {
+    $commitMessage = $customMessage
+  }
   if (-Not $currentBranch) {
     $branchName = $content.id + "-" + $content.Version
     git fetch --all
