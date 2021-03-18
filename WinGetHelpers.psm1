@@ -32,7 +32,7 @@ function Start-WinGetSandbox {
       throw 'The Manifest file does not exist.'
     }
 
-    winget.exe validate $Manifest
+    $out = winget.exe validate $Manifest
     if (-Not $?) {
       throw 'Manifest validation failed.'
     }
