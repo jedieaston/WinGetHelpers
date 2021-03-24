@@ -292,7 +292,7 @@ function Get-WinGetApplication {
     $ErrorActionPreference = 'Stop'
     # Sorry for the mess.
     # Get the manifest ID and version(Publisher.Name)
-    winget source update
+    winget source update | Out-Null
     $littleManifest = (winget show $packageName)
     if ($LASTEXITCODE -ne 0) {throw "Couldn't find package $package."}
     $package = ($littleManifest | Select-Object -Skip 1 | Out-String).Split('[')[1].Split(']')[0]
