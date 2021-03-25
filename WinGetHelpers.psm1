@@ -503,9 +503,17 @@ function Update-WinGetManifest {
       # Delete the old manifest, we're overwriting!
       Remove-Item $manifest
     }
-    ($content | ConvertTo-Yaml).replace("'", '"') | Out-File -FilePath $fileName -Encoding utf8
+
+    # This is to try to get rid of the BOM, so incoming stackoverflow stuff...
+    # ($content | ConvertTo-Yaml).replace("'", '"') | Get-Content -Raw | Out-File -FilePath $fileName -Encoding utf8
+    $content = ($content | ConvertTo-Yaml).replace("'", '"')
+    [System.Environment]::CurrentDirectory = (Get-Location).Path
+    [System.IO.File]::WriteAllLines($fileName, $content) 
     Write-Host $fileName " written."
-    winget validate $fileName
+    winget validate $fileName | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Manifest validation failed."
+    }
     if ($test) {
        Start-WinGetSandbox $fileName
        return $true
