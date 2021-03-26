@@ -28,7 +28,7 @@ function Start-WinGetSandbox {
   if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
     Write-Host '--> Validating Manifest'
 
-    if (-Not (Test-Path -Path $Manifest -PathType Leaf)) {
+    if (-Not (Test-Path -Path $Manifest)) {
       throw 'The Manifest file does not exist.'
     }
 
@@ -68,8 +68,8 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
 
   $desktopAppInstaller = @{
     fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    url      = 'https://github.com/microsoft/winget-cli/releases/download/v-0.2.10191-preview/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    hash     = '2B521E128D7FB368A685432EFE6864473857183C9A886E5725EA32B6C84AF8E1'
+    url      = 'https://github.com/microsoft/winget-cli/releases/download/v-0.2.10771-preview/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
+    hash     = '11ecd121b5a19e07a545e84bc4dc182bd64a6233c9de137e10e3016d1527fc1e'
   }
 
   $vcLibs = @{
@@ -98,10 +98,10 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
 
   New-Item $tempFolder -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
 
-  Get-ChildItem $tempFolder -Recurse -Exclude $dependencies.fileName | Remove-Item -Force
+  Get-ChildItem $tempFolder -Recurse -Exclude $dependencies.fileName | Remove-Item -Force -Recurse
 
   if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
-    Copy-Item -Path $Manifest -Destination $tempFolder
+    Copy-Item -Path $Manifest -Destination $tempFolder -Recurse
   }
 
   # Download dependencies
@@ -172,12 +172,18 @@ Tip: you can type 'Update-Environment' to update your environment variables, suc
 
   if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
     $manifestFileName = Split-Path $Manifest -Leaf
-    $manifestPathInSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Join-Path -Path $tempFolderName -ChildPath $manifestFileName)
+    if (-Not (Test-Path -Path $Manifest -PathType leaf)) {
+        # It's a multi file manifest!!!  
+        $manifestFileName += "\"
+    }
+    $manifestPathInSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Join-Path -Path $tempFolderName -ChildPath ($manifestFileName))
+    Write-Host $manifestPathInSandbox
     if ($auto) {
       $bootstrapPs1Content += @"
 Write-Host @'
 --> Installing the Manifest $manifestFileName
 '@
+Write-Host '$manifestPathInSandbox';
 winget install -m '$manifestPathInSandbox' | Out-File .\tmp.log
 Write-Host @'
 --> Refreshing environment variables
@@ -195,6 +201,7 @@ New-Item .\done;
 Write-Host @'
 --> Installing the Manifest $manifestFileName
 '@
+Write-Host '$manifestPathInSandbox';
 winget install -m '$manifestPathInSandbox'
 Write-Host @'
 --> Refreshing environment variables
