@@ -290,6 +290,49 @@ $Script
   WindowsSandbox $SandboxTestWsbFile  
 
 }
+
+function Get-WinGetManifestType {
+  # This function will determine if a given WinGet application uses a singleton type manifest or 
+  # one with multiple locales.
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$packageID,
+    [Parameter(Mandatory = $false, HelpMessage = "The version to check.")]
+    [string]$version,
+    [Parameter(Mandatory = $false, HelpMessage = "Path to the version of manifest on local drive")]
+    [string]$manifestFile
+  )
+    if([string]::IsNullOrEmpty($manifestFile)){
+      $repositoryUrlRoot = "https://raw.githubusercontent.com/Microsoft/winget-pkgs/master/manifests/"
+      $ErrorActionPreference = 'Stop'
+      # Sorry for the mess.
+      # Get the manifest ID and version(Publisher.Name)
+      winget source update | Out-Null
+      $littleManifest = (winget show $packageName)
+      if ($LASTEXITCODE -ne 0) {throw "Couldn't find package $package."}
+      $package = ($littleManifest | Select-Object -Skip 1 | Out-String).Split('[')[1].Split(']')[0]
+      try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+      catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+      # Now we can get the full manifest.
+      $publisher,$appName = $package.Split('.')
+      $manifestFilePath = $repositoryUrlRoot + ($publisher[0]) + "/" + ($publisher)+ "/" +($appName) + "/" + ($version) + "/" + ($packageID) + ".yaml"
+      $manifest = (Invoke-WebRequest $manifestFilePath).Content | Out-String | ConvertFrom-Yaml -Ordered
+    }
+    else {
+      $manifest = (Get-Content ($manifest + "/" + ($packageID) + ".yaml") | ConvertFrom-Yaml -Ordered)
+    }
+    if ($manifest.ManifestType -eq "Singleton") {
+      return "Singleton";
+    }
+    elif ($manifest.ManifestType -eq "Version") {
+      return "MultipleFile"
+    }
+    else {
+      return $manifest.ManifestType
+    }
+    
+
+}
 function Get-WinGetApplication {
     param (
         [Parameter(Mandatory = $true)]
@@ -307,7 +350,7 @@ function Get-WinGetApplication {
     catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
     # Now we can get the full manifest.
     $publisher,$appName = $package.Split('.')
-    $manifestFilePath = $repositoryUrlRoot + ($publisher)+ "/" +($appName) + "/" + $version + ".yaml"
+    $manifestFilePath = $repositoryUrlRoot + ($publisher[0]) + "/" + ($publisher)+ "/" +($appName) + "/" + ($version) + "/" + ($appName) + ".yaml"
     Write-Host $manifestFilePath
     $manifest = (Invoke-WebRequest $manifestFilePath).Content | Out-String | ConvertFrom-Yaml
     $manifest.appName = $appName
@@ -569,4 +612,21 @@ function New-WinGetCommit {
   }
   git add "$manifest"
   git commit -m $commitMessage
+}
+
+function Get-WinGetApplicationCurrentVersion {
+  # Uses the winget cli to get the current version of an app in the repo. 
+  # Useful for seeing if something needs an update.
+  param (
+     [Parameter(Position=0, Mandatory=$true, HelpMessage="The manifest ID to check.")]
+     [string]$id 
+  )
+
+  $littleManifest = (winget show $id)
+  if ($LASTEXITCODE -ne 0) {
+    throw "Couldn't find manifest " + $id
+  }
+  try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+  catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+  return $version
 }
