@@ -622,6 +622,7 @@ function Get-WinGetApplicationCurrentVersion {
      [string]$id 
   )
 
+  winget source update | Out-Null
   $littleManifest = (winget show $id)
   if ($LASTEXITCODE -ne 0) {
     throw "Couldn't find manifest " + $id
