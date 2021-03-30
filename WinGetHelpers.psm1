@@ -696,6 +696,9 @@ function New-WinGetCommit {
       $theSplitName = $i.Name.Split(".")
       if ($theSplitName.length -eq 3) {
          $content = Get-Content ($manifest + "\" + $i) | ConvertFrom-Yaml -Ordered
+         if ($content.ManifestType.ToLower() -eq "version") {
+            $content = Get-Content ($manifest + "\" + $content.PackageIdentifier + ".locale." + $content.DefaultLocale + ".yaml") | ConvertFrom-Yaml -Ordered 
+         }
          break
       }
   }
@@ -706,7 +709,7 @@ function New-WinGetCommit {
     $commitMessage = $customMessage
   }
   if (-Not $currentBranch) {
-    $branchName = $content.id + "-" + $content.Version
+    $branchName = $content.PackageIdentifier + "-" + $content.PackageVersion
     git fetch --all
     git checkout -b "$branchName" upstream/master
     if($LASTEXITCODE -ne 0) {
