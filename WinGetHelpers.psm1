@@ -401,7 +401,7 @@ function Update-WinGetManifest {
     # Now with support for 1.0 manifests! I hope.
     param (
         [Parameter(Mandatory=$true, Position=0, HelpMessage="Path to manifest to be updated.")]
-        [string] $currentManifestFolder,
+        [string] $oldManifestFolder,
         [Parameter(Mandatory=$true, Position=1, HelpMessage="The new version number.")]
         [string] $newVersion,
         [Parameter(HelpMessage="If this manifest only supports a single architecture, the link to the new installer.")]
@@ -424,10 +424,10 @@ function Update-WinGetManifest {
     $ProgressPreference = "SilentlyContinue"
     $ErrorActionPreference = "Stop"
     # Get the manifest's content.
-    $type = Get-WinGetManifestType $currentManifestFolder
+    $type = Get-WinGetManifestType $oldManifestFolder
     $newManifest = @{}
-    foreach ($i in (Get-ChildItem -Path $currentManifestFolder)) {
-        $content = (Get-Content ($currentManifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
+    foreach ($i in (Get-ChildItem -Path $oldManifestFolder)) {
+        $content = (Get-Content ($oldManifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
         $newManifest.add($content.ManifestType, $content)
     }
     # Now for the updating!
@@ -484,7 +484,7 @@ function Update-WinGetManifest {
     foreach($i in $installers) {
         $url = $urlMap[$i.Architecture]
         $i.InstallerUrl = $url
-        Write-Host "Downloading installer for architecture "$i.Architecture"..." -ForegroundColor Yellow
+        Write-Host 'Downloading installer for architecture'$i.Architecture'...' -ForegroundColor Yellow
         Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
         $i.InstallerSha256 = (Get-FileHash $env:TEMP\installer).Hash
         # Get Product Code if necessary
@@ -568,18 +568,18 @@ function Convert-WinGetSingletonToMultiFile {
     # bare minimum multifile manifest in a different folder.
     param (
         [Parameter(Position=0, Mandatory=$true, HelpMessage="The manifest you wish to convert.")]
-        [string]$currentManifestFolder
+        [string]$oldManifestFolder
     )
     $ErrorActionPreference = "Stop"
     $versionSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.version.1.0.0.schema.json" | ConvertFrom-Json
     $localeSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.defaultlocale.1.0.0.schema.json" | ConvertFrom-Json
     $installerSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.installer.1.0.0.schema.json" | ConvertFrom-Json
     $requiredKeys = $versionSchema.required + $localeSchema.required + $installerSchema.required
-    $type = Get-WinGetManifestType $currentManifestFolder
+    $type = Get-WinGetManifestType $oldManifestFolder
     if ($type -ne "singleton") {
         throw "This folder does not contain a singleton manifest."
     }
-    $currentManifest = (Get-ChildItem -Path $currentManifestFolder)[0] | Get-Content | ConvertFrom-Yaml -Ordered
+    $currentManifest = (Get-ChildItem -Path $oldManifestFolder)[0] | Get-Content | ConvertFrom-Yaml -Ordered
     $newManifest = @{}
     # Add required metadata.
     $newManifest["version"] = [Ordered]@{
