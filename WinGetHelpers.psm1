@@ -304,9 +304,11 @@ function Get-WinGetManifestType {
   
   foreach($i in (Get-ChildItem -Path $manifestFolder)) {
       $theSplitName = $i.Name.Split(".")
-      if ($theSplitName.length -eq 3) {
+      if ($theSplitName.length -ge 3) {
          $manifest = Get-Content ($manifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered
-         break
+         if (($manifest.ManifestType.ToLower() -eq "version") -or $manifest.ManifestType.ToLower() -eq "singleton") {
+          break
+         }
       }
   }
   if ($manifest.ManifestType.ToLower() -eq "version") {
@@ -456,7 +458,17 @@ function Update-WinGetManifest {
             }
         }
         if(-Not $inManifest) {
-            $installers.add(@{Architecture = $i.ToLower()})
+            # Copy everything but the arch from the existing architecture.
+            # Found at: https://www.powershellgallery.com/packages/PSTK/1.2.1/Content/Public%5CCopy-OrderedHashtable.ps1
+            $temp = New-Object -TypeName System.Collections.Specialized.OrderedDictionary
+            $MemoryStream     = New-Object -TypeName System.IO.MemoryStream
+            $BinaryFormatter  = New-Object -TypeName System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            $BinaryFormatter.Serialize($MemoryStream, $installers[0])
+            $MemoryStream.Position = 0
+            $temp = $BinaryFormatter.Deserialize($MemoryStream)
+            $MemoryStream.Close()
+            $temp.Architecture = $i.ToLower()
+            $installers.add($temp)
         }
     }
     if (($installers.Length -eq 1) -And (-Not [String]::IsNullOrEmpty($newURL))) {
@@ -582,6 +594,7 @@ function Convert-WinGetSingletonToMultiFile {
     $currentManifest = (Get-ChildItem -Path $oldManifestFolder)[0] | Get-Content | ConvertFrom-Yaml -Ordered
     $newManifest = @{}
     # Add required metadata.
+    $currentManifest["PackageVersion"] = [string]$currentManifest["PackageVersion"]
     $newManifest["version"] = [Ordered]@{
         PackageIdentifier = $currentManifest["PackageIdentifier"];
         PackageVersion = $currentManifest["PackageVersion"];
