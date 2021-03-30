@@ -407,7 +407,7 @@ function Update-WinGetManifest {
         [Parameter(HelpMessage="If this manifest only supports a single architecture, the link to the new installer.")]
         [string] $newURL,
         [Parameter(HelpMessage="If this manifest supports multiple architectures, a hashtable of all of the URLs.")]
-        [hashtable] $urlMap,
+        [hashtable] $urlMap = @{},
         [Parameter(HelpMessage="Get the Product Code for each installer.")]
         [switch] $productCode,
         [Parameter(HelpMessage="Run the new manifest in a Windows Sandbox after it is created.")]
