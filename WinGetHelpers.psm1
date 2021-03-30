@@ -292,75 +292,34 @@ $Script
 }
 
 function Get-WinGetManifestType {
-  # This function will determine if a given WinGet application uses a singleton type manifest or 
-  # one with multiple locales.
+  # Helper function. Given a folder, we see if it contains a multi-file or singleton manifest.
   param (
-    [Parameter(Mandatory = $true)]
-    [string]$packageID,
-    [Parameter(Mandatory = $false, HelpMessage = "The version to check.")]
-    [string]$version,
-    [Parameter(Mandatory = $false, HelpMessage = "Path to the version of manifest on local drive")]
-    [string]$manifestFile
+      [Parameter(Position = 0, Mandatory = $true, HelpMessage="Manifest to check on.")]
+      [string]$manifestFolder
   )
-    if([string]::IsNullOrEmpty($manifestFile)){
-      $repositoryUrlRoot = "https://raw.githubusercontent.com/Microsoft/winget-pkgs/master/manifests/"
-      $ErrorActionPreference = 'Stop'
-      # Sorry for the mess.
-      # Get the manifest ID and version(Publisher.Name)
-      winget source update | Out-Null
-      $littleManifest = (winget show $packageName)
-      if ($LASTEXITCODE -ne 0) {throw "Couldn't find package $package."}
-      $package = ($littleManifest | Select-Object -Skip 1 | Out-String).Split('[')[1].Split(']')[0]
-      try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-      catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-      # Now we can get the full manifest.
-      $publisher,$appName = $package.Split('.')
-      $manifestFilePath = $repositoryUrlRoot + ($publisher[0]) + "/" + ($publisher)+ "/" +($appName) + "/" + ($version) + "/" + ($packageID) + ".yaml"
-      $manifest = (Invoke-WebRequest $manifestFilePath).Content | Out-String | ConvertFrom-Yaml -Ordered
-    }
-    else {
-      $manifest = (Get-Content ($manifest + "/" + ($packageID) + ".yaml") | ConvertFrom-Yaml -Ordered)
-    }
-    if ($manifest.ManifestType -eq "Singleton") {
-      return "Singleton";
-    }
-    elif ($manifest.ManifestType -eq "Version") {
-      return "MultipleFile"
-    }
-    else {
-      return $manifest.ManifestType
-    }
-    
+  $ErrorActionPreference = "Stop"
+  if(Test-Path -Path $manifestFolder -PathType Leaf) {
+      throw "This isn't a folder, this is a file!"
+  }
+  
+  foreach($i in (Get-ChildItem -Path $manifestFolder)) {
+      $theSplitName = $i.Name.Split(".")
+      if ($theSplitName.length -eq 3) {
+         $manifest = Get-Content ($manifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered
+         break
+      }
+  }
+  if ($manifest.ManifestType.ToLower() -eq "version") {
+      return "multifile"
+  }
+  elseif ($manifest.ManifestType.ToLower() -eq "singleton") {
+      return "singleton"
+  }
+  else {
+      throw "Unknown manifest type: " + $manifest.ManifestType
+  }
+}
 
-}
-function Get-WinGetApplication {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$packageName
-    )
-    $repositoryUrlRoot = "https://raw.githubusercontent.com/Microsoft/winget-pkgs/master/manifests/"
-    $ErrorActionPreference = 'Stop'
-    # Sorry for the mess.
-    # Get the manifest ID and version(Publisher.Name)
-    winget source update | Out-Null
-    $littleManifest = (winget show $packageName)
-    if ($LASTEXITCODE -ne 0) {throw "Couldn't find package $package."}
-    $package = ($littleManifest | Select-Object -Skip 1 | Out-String).Split('[')[1].Split(']')[0]
-    try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-    catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-    # Now we can get the full manifest.
-    $publisher,$appName = $package.Split('.')
-    $manifestFilePath = $repositoryUrlRoot + ($publisher[0]) + "/" + ($publisher)+ "/" +($appName) + "/" + ($version) + "/" + ($appName) + ".yaml"
-    Write-Host $manifestFilePath
-    $manifest = (Invoke-WebRequest $manifestFilePath).Content | Out-String | ConvertFrom-Yaml
-    $manifest.appName = $appName
-    # Getting around odd manifests. This will probably break when multiple installer types are allowed.
-    if ($null -ne $manifest.Installers.InstallerType) 
-    {
-      $manifest.InstallerType = $manifest.Installers.InstallerType
-    }
-    return $manifest
-}
 function Get-URLFileHash {
     param (
         [Parameter(mandatory=$true)] 
@@ -376,22 +335,6 @@ function Get-URLFileHash {
     Write-Host "It has been written to the clipboard."
 }
 
-function Get-WinGetManifestInstallerHash {
-  Param(
-   [Parameter(mandatory=$true, Position = 0, HelpMessage = "The Manifest to get hash for.")]
-   [String] $manifest
-  )
-  $ErrorActionPreference = 'Stop'
-  $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
-  $ProgressPreference = 'SilentlyContinue' 
-  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
-  $hash = Get-FileHash $env:TEMP\installer
-  Remove-Item $env:TEMP\installer
-  Write-Host "The hash for the file at " $url "is "$hash.hash
-  Set-Clipboard $hash.hash
-  Write-Host "It has been written to the clipboard."
-}
-
 function Get-GitHubReleases {
     # Requires the GitHub CLI!
   Param(
@@ -400,54 +343,7 @@ function Get-GitHubReleases {
   )
   $env:GH_REPO=$repo; gh release list -L 5; Remove-Item env:\GH_REPO
 }
-function Assert-WinGetManifestStatus {
-  param (
-    [Parameter(Mandatory=$true)]
-    [string]$id
-  )
-  $ErrorActionPreference = 'Stop'
-  $manifest = Get-WingetApplication $id
-  if ($null -eq $manifest)
-  {
-    Write-Host "That package couldn't be found in the community repo."
-  }
-  try {
-    $ProgressPreference = 'SilentlyContinue' 
-    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $manifest.Installers.Url
-    $hash = (Get-FileHash $env:TEMP\installer).Hash.ToLower()
-    if ($hash -ne (($manifest.Installers.Sha256).ToLower())) {
-      Write-Host "$id hash does not match installer hash."
-      Write-Host "hash is: " $hash.ToUpper()
-    }
-    else {
-      Write-Host "$id hash matches installer hash!"
-    }
-    Remove-Item $env:TEMP\installer
-  }
-  catch {
-    Write-Host "unable to verify hash for $id ."
-  }
-}
-function Get-WinGetManifestProductCode {
-  # Carbon must be installed for this to work!
-  # Vars
-  Param(
-   [Parameter(mandatory=$true, Position = 0, HelpMessage = "The Manifest to get product code for.")]
-   [String] $manifest
-  )
-  $ErrorActionPreference = 'Stop'
-  Import-Module 'Carbon'
-  $url = (Get-Content $manifest | ConvertFrom-Yaml).Installers.URL
-  $ProgressPreference = 'SilentlyContinue' 
-  Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
-  $out = ((Get-MSI $env:TEMP\installer).ProductCode).ToString()
-  write-host $out
-  Remove-Item $env:TEMP\installer
-  $outPretty = "{" + $out.ToUpper() + "}"
-  Write-Host "The product code for " $manifest " is " $outPretty "."
-  Write-Host "It's in your clipboard."
-  Set-Clipboard $outPretty
-}
+
 function Test-WinGetManifest {
   Param(
  [Parameter(mandatory=$true, Position = 0, HelpMessage = "The Manifest to test.")]
@@ -502,78 +398,158 @@ function Test-WinGetManifest {
   }
 }
 function Update-WinGetManifest {
-    # Using the passed parameters, creates a new manifest from an old one to add an application that was updated.
-    # Most should be self explanatory.
+    # Now with support for 1.0 manifests! I hope.
     param (
-        [Parameter(mandatory=$true, Position=0, HelpMessage="The manifest to update.")]
-        [string] $manifest,
-        [Parameter(mandatory=$true, Position=1, HelpMessage="The new version number.")]
+        [Parameter(Mandatory=$true, Position=0, HelpMessage="Path to manifest to be updated.")]
+        [string] $currentManifestFolder,
+        [Parameter(Mandatory=$true, Position=1, HelpMessage="The new version number.")]
         [string] $newVersion,
-        [Parameter(mandatory=$false, Position=2, HelpMessage="The URL for the new installer.")]
+        [Parameter(HelpMessage="If this manifest only supports a single architecture, the link to the new installer.")]
         [string] $newURL,
-        [Parameter(HelpMessage="If it is an MSI, get the Product Code and add it to the manifest.")]
+        [Parameter(HelpMessage="If this manifest supports multiple architectures, a hashtable of all of the URLs.")]
+        [hashtable] $urlMap,
+        [Parameter(HelpMessage="Get the Product Code for each installer.")]
         [switch] $productCode,
+        [Parameter(HelpMessage="Run the new manifest in a Windows Sandbox after it is created.")]
         [switch] $test,
+        [Parameter(HelpMessage="Run the new manifest in a Windows Sandbox and shut it down when installation completes successfully.")]
         [switch] $silentTest,
+        [Parameter(HelpMessage="Attempt to auto replace the version number in the Installer URLs.")]
         [switch] $autoReplaceURL,
-        [switch] $overwrite,
-        [Parameter(HelpMessage="Commit if the manifest installs successfully.")]
+        [Parameter(HelpMessage="Run New-WinGetCommit if this function completes successfully.")]
         [switch] $commit
     )
+    # Just checking to ensure Carbon is available.
     Import-Module 'Carbon'
     $ProgressPreference = "SilentlyContinue"
-    $ErrorActionPreference = 'Stop'
-    $content = Get-Content $manifest | ConvertFrom-Yaml -Ordered
-    $oldVersion = $content.Version
-    $content.Version = $newVersion
-    if ($autoReplaceURL -and ($oldVersion -ne "latest")) {
-        $content.Installers[0].Url = $content.Installers[0].Url -replace  $oldVersion, $newVersion
-        
-        Write-Host "Auto replaced URL resulted in: " $content.Installers[0].Url
+    $ErrorActionPreference = "Stop"
+    # Get the manifest's content.
+    $type = Get-WinGetManifestType $currentManifestFolder
+    $newManifest = @{}
+    foreach ($i in (Get-ChildItem -Path $currentManifestFolder)) {
+        $content = (Get-Content ($currentManifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
+        $newManifest.add($content.ManifestType, $content)
     }
-    elseif ($newURL.length -ne 0) {
-        $content.Installers[0].Url = $newURL
+    # Now for the updating!
+    # Get the installers array and the PackageIdentifier
+    if ($type -eq "multifile") {
+        $installers = $newManifest.Installer.Installers
+        $packageIdentifier = $newManifest.Installer.PackageIdentifier
+        $oldVersion = $newManifest.Version.PackageVersion
     }
     else {
-        Write-Host "What is the Installer URL for the new version?"
-        $content.Installers[0].Url = Read-Host $content.Installers[0].Url
+        $installers = $newManifest.singleton.Installers
+        $packageIdentifier = $newManifest.singleton.PackageIdentifier
+        $oldVersion = $newManifest.singleton.PackageVersion
     }
-    # Get hash.
-    Write-Host "Downloading installer, please stand by..."
-    $ProgressPreference = 'SilentlyContinue' 
-    Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $content.Installers[0].Url
-    $content.Installers[0].Sha256 = (Get-FileHash $env:TEMP\installer).Hash
-    # Get Product Code if necessary.
-    if ($productCode) {
-        $content.Installers[0].ProductCode = '{' + (((Get-MSI $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
+    # Make sure all architectures are lowercase in new manifest
+    foreach($i in $installers) {
+        $i.Architecture = $i.Architecture.ToLower()
     }
-    $content | ConvertTo-Yaml | Write-Host
-    $fileName =  (".\" + $content.Version + ".yaml")
-    if ($overwrite) {
-      # Delete the old manifest, we're overwriting!
-      Remove-Item $manifest
+    foreach($i in $urlMap.Keys) {
+        # Add non existing architectures.
+        $inManifest = $false
+        foreach($j in $installers) {
+            if ($i.ToLower() -eq $j.Architecture) {
+                $inManifest = $true
+                break
+            }
+        }
+        if(-Not $inManifest) {
+            $installers.add(@{Architecture = $i.ToLower()})
+        }
     }
+    if (($installers.Length -eq 1) -And (-Not [String]::IsNullOrEmpty($newURL))) {
+        $urlMap = @{$installers[0].Architecture = $newURL}
+    }
+    elseif ($autoReplaceURL) {
+        $urlMap = @{}
+        foreach ($i in $installers) {
+            $urlMap[$i.Architecture] = $i.InstallerUrl -Replace $oldVersion, $newVersion
+            Write-Host "Auto-replace for arch" $i.Architecture "resulted in URL "$urlMap[$i.Architecture] -ForegroundColor Yellow
+        }
+    }
+    if ($urlMap.Count -ne $installers.Length) {
+        foreach($i in $installers) {
+            if (-Not ($urlMap.ContainsKey($i.Architecture))) {
+                # The user didn't specify this URL.
+                Write-Host "What is the Installer URL for architecture "$i.Architecture"?"
+                $urlMap[$i.Architecture] = Read-Host $i.InstallerUrl
+            }
+        }
+        # If the user provided new architectures, we don't need to worry about it.
+    }
+    
+    # Let's download the installers and get the needed info.
+    foreach($i in $installers) {
+        $url = $urlMap[$i.Architecture]
+        $i.InstallerUrl = $url
+        Write-Host "Downloading installer for architecture "$i.Architecture"..." -ForegroundColor Yellow
+        Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
+        $i.InstallerSha256 = (Get-FileHash $env:TEMP\installer).Hash
+        # Get Product Code if necessary
+        if($i.Contains("ProductCode") -Or ($productCode)) {
+            $i.ProductCode = '{' + (((Get-MSI $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
+        }
+    }
+    # put the new installers array in the right place.
+    if ($type -eq "multifile") {
+        $newManifest.Installer.Installers = $installers
+    }
+    else {
+        $newManifest.singleton.Installers = $installers
+    }
+    Write-Host "New installer downloads complete!" -ForegroundColor Green
+    # Begin writing the files. This'll be ugly.
+    # First, set the version numbers in every place they exist in a multifile manifest.
+    if ($type -eq "multifile") {
+        foreach($i in $newManifest.Keys) {
+            $newManifest[$i]["PackageVersion"] = $newVersion
+        }
+    }
+    else {
+        $newManifest.singleton.PackageVersion = $newVersion
+    }
+    # Now let's get these back to YAML.
+    $path = ".\" + $newVersion + "\"
+    New-Item -Type Directory $path -Force 
 
-    # This is to try to get rid of the BOM, so incoming stackoverflow stuff...
-    # ($content | ConvertTo-Yaml).replace("'", '"') | Get-Content -Raw | Out-File -FilePath $fileName -Encoding utf8
-    $content = ($content | ConvertTo-Yaml).replace("'", '"')
-    [System.Environment]::CurrentDirectory = (Get-Location).Path
-    [System.IO.File]::WriteAllLines($fileName, $content) 
-    Write-Host $fileName " written."
-    winget validate $fileName | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "Manifest validation failed."
+    foreach($i in $newManifest.Keys) {
+        if (($newManifest[$i].ManifestType.ToLower() -eq "singleton") -or ($newManifest[$i].ManifestType.ToLower() -eq "version")) {
+            $fileName = $path + $packageIdentifier + ".yaml"
+        }
+        elseif($newManifest[$i].ManifestType.ToLower() -eq "installer") {
+            $fileName = $path + $packageIdentifier + ".installer.yaml"
+        }
+        elseif(($newManifest[$i].ManifestType.ToLower() -eq "locale") -Or ($newManifest[$i].ManifestType.ToLower() -eq "defaultlocale")) {
+            $fileName = $path + $packageIdentifier + ".locale." + $newManifest[$i].PackageLocale + ".yaml"
+        }
+        else {
+            throw $newManifest[$i].ManifestType.ToLower() + " is an unknown type."
+        }
+        # Add schema info for IntelliSense
+        $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
+        # And the manifest...
+        $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
+        [System.Environment]::CurrentDirectory = (Get-Location).Path
+        [System.IO.File]::WriteAllLines($fileName, $fileContent)
+        Write-Host $fileName "written." -ForegroundColor Green
+    }
+    # Validate this thing.
+    winget validate $path | Out-Null
+    if($LASTEXITCODE -ne 0) {
+        throw "Manifest validation failed."
     }
     if ($test) {
-       Start-WinGetSandbox $fileName
-       return $true
+        Start-WinGetSandbox $path
+        return $true
     }
     elseif ($silentTest) {
-      $testSuccess = Test-WinGetManifest $fileName
+      $testSuccess = Test-WinGetManifest $path
       if ($testSuccess) {
         Write-Host "Manifest successfully installed in Windows Sandbox!"
         if ($commit) {
-          New-WinGetCommit $fileName
+          New-WinGetCommit $path
         }
         return $true
       }
@@ -585,7 +561,121 @@ function Update-WinGetManifest {
     else {
       return $true
     }
+
 }
+function Convert-WinGetSingletonToMultiFile {
+    # Given a folder that contains a WinGet singleton manifest, this function creates a 
+    # bare minimum multifile manifest in a different folder.
+    param (
+        [Parameter(Position=0, Mandatory=$true, HelpMessage="The manifest you wish to convert.")]
+        [string]$currentManifestFolder
+    )
+    $ErrorActionPreference = "Stop"
+    $versionSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.version.1.0.0.schema.json" | ConvertFrom-Json
+    $localeSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.defaultlocale.1.0.0.schema.json" | ConvertFrom-Json
+    $installerSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.installer.1.0.0.schema.json" | ConvertFrom-Json
+    $requiredKeys = $versionSchema.required + $localeSchema.required + $installerSchema.required
+    $type = Get-WinGetManifestType $currentManifestFolder
+    if ($type -ne "singleton") {
+        throw "This folder does not contain a singleton manifest."
+    }
+    $currentManifest = (Get-ChildItem -Path $currentManifestFolder)[0] | Get-Content | ConvertFrom-Yaml -Ordered
+    $newManifest = @{}
+    # Add required metadata.
+    $newManifest["version"] = [Ordered]@{
+        PackageIdentifier = $currentManifest["PackageIdentifier"];
+        PackageVersion = $currentManifest["PackageVersion"];
+        DefaultLocale = $currentManifest["PackageLocale"];
+        ManifestType = "version";
+        ManifestVersion = "1.0.0";
+    }
+    $newManifest["defaultLocale"] = [Ordered]@{
+        PackageIdentifier = $currentManifest["PackageIdentifier"];
+        PackageVersion = $currentManifest["PackageVersion"];
+        PackageLocale = $currentManifest["PackageLocale"];
+        Publisher = $currentManifest["Publisher"];
+        PackageName = $currentManifest["PackageName"];
+        License = $currentManifest["License"];
+        ShortDescription = $currentManifest["ShortDescription"];
+        ManifestType = "defaultLocale";
+        ManifestVersion = "1.0.0";
+    }
+    $newManifest["installer"] = [Ordered]@{
+        PackageIdentifier = $currentManifest["PackageIdentifier"];
+        PackageVersion = $currentManifest["PackageVersion"];
+        Installers = $currentManifest["Installers"];
+        ManifestType = "installer";
+        ManifestVersion = "1.0.0";
+    }
+    # Now, put any keys we missed in the right spots.
+    $extraKeys = [Ordered]@{}
+    $extraKeys["version"] = [Ordered]@{}
+    $extraKeys["defaultLocale"] = [Ordered]@{}
+    $extraKeys["installer"] = [Ordered]@{}
+    foreach($i in $currentManifest.Keys) {
+        if (-Not ($requiredKeys -contains $i) ) {
+            if ($i -in $versionSchema.properties.PSObject.Properties.Name) {
+                $extraKeys["version"].add($i, $currentManifest[$i])
+            }
+            elseif($i -in $localeSchema.properties.PSObject.Properties.Name) {
+                $extraKeys["defaultLocale"].add($i, $currentManifest[$i])
+            }
+            elseif($i -in $installerSchema.properties.PSObject.Properties.Name) {
+                $extraKeys["installer"].add($i, $currentManifest[$i])
+            }
+        }
+    }
+    # Now, add the extra keys back to the new Manifest.
+    # Since you can't add multiple keys at a certain place in a ordered dict in PowerShell, I had to do this.
+    $count = 3
+    foreach($i in $extraKeys["version"].Keys) {
+        $newManifest["version"].Insert($count, $i, $extraKeys["version"][$i])
+        $count++;
+    }
+    $count = 3
+    foreach($i in $extraKeys["defaultLocale"].Keys) {
+        $newManifest["defaultLocale"].Insert($count, $i, $extraKeys["defaultLocale"][$i])
+        $count++;
+    }
+    $count = 2
+    foreach($i in $extraKeys["installer"].Keys) {
+        $newManifest["installer"].Insert($count, $i, $extraKeys["installer"][$i])
+        $count++;
+    }
+    # Now we can write the files.
+    $path = ".\" + $currentManifest["PackageVersion"] + "-multiFile\"
+    New-Item -Type Directory $path -Force
+
+    # Copied (with modifications) from Update-WinGetManifest. I should break this out into a function...
+    foreach($i in $newManifest.Keys) {
+        if ($newManifest[$i].ManifestType.ToLower() -eq "version") {
+            $fileName = $path + $currentManifest["PackageIdentifier"] + ".yaml"
+        }
+        elseif($newManifest[$i].ManifestType.ToLower() -eq "installer") {
+            $fileName = $path + $currentManifest["PackageIdentifier"] + ".installer.yaml"
+        }
+        elseif($newManifest[$i].ManifestType.ToLower() -eq "defaultlocale") {
+            $fileName = $path + $currentManifest["PackageIdentifier"] + ".locale." + $newManifest[$i].PackageLocale + ".yaml"
+        }
+        else {
+            throw $newManifest[$i].ManifestType.ToLower() + " is an unknown type."
+        }
+        # Add schema info for IntelliSense
+        $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
+        # And the manifest...
+        $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
+        [System.Environment]::CurrentDirectory = (Get-Location).Path
+        [System.IO.File]::WriteAllLines($fileName, $fileContent)
+        Write-Host $fileName "written." -ForegroundColor Green
+    }
+    winget validate $path | Out-Null
+    if($LASTEXITCODE -ne 0) {
+        throw "Manifest validation failed. Check the source manifest to ensure it's good and try again."
+    }
+    Write-Host "All done with the conversion. The new manifest can be found in " + $path + "." -ForegroundColor Green
+    Write-Host "Please check it before committing." -ForegroundColor Green
+}
+
 function New-WinGetCommit {
   # Autocreates a new commit. Don't use this unless you're really lazy.
   # Make sure that you have an upstream branch set too (to microsoft/winget-pkgs), or creating a new branch may fail.
@@ -609,11 +699,14 @@ function New-WinGetCommit {
     $branchName = $content.id + "-" + $content.Version
     git fetch --all
     git checkout -b "$branchName" upstream/master
+    if($LASTEXITCODE -ne 0) {
+      # The branch already exists.
+      git checkout "$branchName"
+    }
   }
   git add "$manifest"
   git commit -m $commitMessage
 }
-
 function Get-WinGetApplicationCurrentVersion {
   # Uses the winget cli to get the current version of an app in the repo. 
   # Useful for seeing if something needs an update.
