@@ -688,9 +688,19 @@ function New-WinGetCommit {
     [string] $customMessage
   )
   $ErrorActionPreference = "Stop"
-  $content = Get-Content $manifest | ConvertFrom-Yaml
+  if(Test-Path -Path $manifest -PathType Leaf) {
+      throw "This isn't a folder, this is a file!"
+  }
+  # $content = Get-Content $manifest | ConvertFrom-Yaml
+  foreach($i in (Get-ChildItem -Path $manifest)) {
+      $theSplitName = $i.Name.Split(".")
+      if ($theSplitName.length -eq 3) {
+         $content = Get-Content ($manifest + "\" + $i) | ConvertFrom-Yaml -Ordered
+         break
+      }
+  }
   if([string]::IsNullOrEmpty($customMessage) -or [string]::IsNullOrWhiteSpace($customMessage)) {
-   $commitMessage = "Added " + $content.name + " version " + $content.Version + "."
+   $commitMessage = "Added " + $content.PackageName + " version " + $content.PackageVersion + "."
   }
   else {
     $commitMessage = $customMessage
