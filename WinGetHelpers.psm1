@@ -543,8 +543,7 @@ function Update-WinGetManifest {
         $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
         # And the manifest...
         $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
-        [System.Environment]::CurrentDirectory = (Get-Location).Path
-        [System.IO.File]::WriteAllLines($fileName, $fileContent)
+        $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
         Write-Host $fileName "written." -ForegroundColor Green
     }
     # Validate this thing.
@@ -580,7 +579,9 @@ function Convert-WinGetSingletonToMultiFile {
     # bare minimum multifile manifest in a different folder.
     param (
         [Parameter(Position=0, Mandatory=$true, HelpMessage="The manifest you wish to convert.")]
-        [string]$oldManifestFolder
+        [string]$oldManifestFolder,
+        [Parameter(HelpMessage="Replace the old manifest with this new one.")]
+        [switch]$overwrite
     )
     $ErrorActionPreference = "Stop"
     $versionSchema = Invoke-WebRequest "https://aka.ms/winget-manifest.version.1.0.0.schema.json" | ConvertFrom-Json
@@ -677,15 +678,19 @@ function Convert-WinGetSingletonToMultiFile {
         $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
         # And the manifest...
         $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
-        [System.Environment]::CurrentDirectory = (Get-Location).Path
-        [System.IO.File]::WriteAllLines($fileName, $fileContent)
+        $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
         Write-Host $fileName "written." -ForegroundColor Green
     }
     winget validate $path | Out-Null
     if($LASTEXITCODE -ne 0) {
         throw "Manifest validation failed. Check the source manifest to ensure it's good and try again."
     }
-    Write-Host "All done with the conversion. The new manifest can be found in " + $path + "." -ForegroundColor Green
+    if($overwrite) {
+      Remove-Item -Recurse $oldManifestFolder
+      Move-Item $path $oldManifestFolder
+      $path = $oldManifestFolder
+    }
+    Write-Host "All done with the conversion. The new manifest can be found in "$path"." -ForegroundColor Green
     Write-Host "Please check it before committing." -ForegroundColor Green
 }
 
