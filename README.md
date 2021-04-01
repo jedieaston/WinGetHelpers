@@ -1,6 +1,6 @@
 # WinGetHelpers!
 
-* Now updated for 1.0 manifests! *
+__Now updated for 1.0 manifests!__
 
 
 These are some cmdlets I hastely made to help support microsoft/winget-pkgs. Maybe they'll help you too. 
