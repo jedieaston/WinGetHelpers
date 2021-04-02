@@ -427,6 +427,18 @@ function Update-WinGetManifest {
     $ErrorActionPreference = "Stop"
     # Get the manifest's content.
     $type = Get-WinGetManifestType $oldManifestFolder
+    if(($urlMap.Count -gt 1) -and ($type -eq "singleton")) {
+      # If we were passed new architectures and were using a singleton manifest, we need a multifile one now.
+      $converted = $true
+      Write-Host "You're adding multiple architectures to a singleton manifest!" -Foreground Yellow
+      Write-Host "Creating a multifile version of $oldManifestFolder..." -ForegroundColor Yellow
+      $oldManifestFolder = Convert-WinGetSingletonToMultiFile $oldManifestFolder
+      $type = "multifile"
+      Write-Host "Conversion successful. Let's proceed." -ForegroundColor Yellow
+    }
+    else {
+      $converted = $false
+    }
     $newManifest = @{}
     foreach ($i in (Get-ChildItem -Path $oldManifestFolder)) {
         $content = (Get-Content ($oldManifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
@@ -546,6 +558,10 @@ function Update-WinGetManifest {
         $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
         Write-Host $fileName "written." -ForegroundColor Green
     }
+    # Get rid of the temporary manifest we created if we needed a conversion.
+    if($converted) {
+      Remove-Item -Recurse $oldManifestFolder 
+    }
     # Validate this thing.
     winget validate $path | Out-Null
     if($LASTEXITCODE -ne 0) {
@@ -658,7 +674,7 @@ function Convert-WinGetSingletonToMultiFile {
     }
     # Now we can write the files.
     $path = ".\" + $currentManifest["PackageVersion"] + "-multiFile\"
-    New-Item -Type Directory $path -Force
+    New-Item -Type Directory $path -Force | Out-Null
 
     # Copied (with modifications) from Update-WinGetManifest. I should break this out into a function...
     foreach($i in $newManifest.Keys) {
@@ -692,6 +708,7 @@ function Convert-WinGetSingletonToMultiFile {
     }
     Write-Host "All done with the conversion. The new manifest can be found in "$path"." -ForegroundColor Green
     Write-Host "Please check it before committing." -ForegroundColor Green
+    return $path
 }
 
 function New-WinGetCommit {
