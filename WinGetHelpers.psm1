@@ -555,7 +555,9 @@ function Update-WinGetManifest {
         $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
         # And the manifest...
         $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
-        $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
+        [System.Environment]::CurrentDirectory = (Get-Location).Path
+        [System.IO.File]::WriteAllLines($fileName, $fileContent)
+        # $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
         Write-Host $fileName "written." -ForegroundColor Green
     }
     # Get rid of the temporary manifest we created if we needed a conversion.
@@ -729,12 +731,16 @@ function New-WinGetCommit {
   # $content = Get-Content $manifest | ConvertFrom-Yaml
   foreach($i in (Get-ChildItem -Path $manifest)) {
       $theSplitName = $i.Name.Split(".")
-      if ($theSplitName.length -eq 3) {
+      if ($theSplitName.length -ge 3) {
          $content = Get-Content ($manifest + "\" + $i) | ConvertFrom-Yaml -Ordered
          if ($content.ManifestType.ToLower() -eq "version") {
-            $content = Get-Content ($manifest + "\" + $content.PackageIdentifier + ".locale." + $content.DefaultLocale + ".yaml") | ConvertFrom-Yaml -Ordered 
+            $content = Get-Content ($manifest + "\" + $content.PackageIdentifier + ".locale." + $content.DefaultLocale + ".yaml") | ConvertFrom-Yaml -Ordered
+            break
          }
-         break
+         elseif($content.ManifestType.ToLower() -eq "singleton") {
+           break
+         }
+         
       }
   }
   if([string]::IsNullOrEmpty($customMessage) -or [string]::IsNullOrWhiteSpace($customMessage)) {
