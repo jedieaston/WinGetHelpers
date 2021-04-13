@@ -27,9 +27,7 @@ function Start-WinGetSandbox {
     .NOTES
         Detail on what the script does, if this is needed.
 
-    #>
-  # Parse arguments
-
+   #>
   Param(
     # The Manifest to install in the Sandbox.
     [Parameter(Position = 0, HelpMessage = "The Manifest to install in the Sandbox.")]
@@ -322,8 +320,32 @@ $Script
 }
 
 function Get-WinGetManifestType {
-  # Helper function. Given a folder, we see if it contains a multi-file or singleton manifest.
+  <#
+    .SYNOPSIS
+        Given a WinGet manifest, the function determines if it is a multifile or singleton manifest.
+
+    .DESCRIPTION
+       Given a WinGet manifest, the function determines if it is a multifile or singleton manifest.
+       This is a helper function designed for ensuring that we look in the correct places for manifest data.
+
+    .INPUTS
+        Nothing can be piped (yet). 
+
+    .OUTPUTS
+        "multifile" if it is a multifile manifest, or "singleton" if it is a singleton.
+
+    .EXAMPLE
+        Get-WinGetManifestType .\myManifest\ 
+        Checks to see if the manifest is a singleton or multifile manifest, and returns which it is.
+
+    .LINK
+        https://github.com/microsoft/winget-cli/blob/master/doc/ManifestSpecv1.0.md
+
+    .NOTES
+        Based on Windows Package Manager Manifest Schema 1.0.
+    #>
   param (
+      # Manifest to check on.
       [Parameter(Position = 0, Mandatory = $true, HelpMessage="Manifest to check on.")]
       [string]$manifestFolder
   )
