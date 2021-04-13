@@ -375,18 +375,45 @@ function Get-WinGetManifestType {
 }
 
 function Get-URLFileHash {
-    param (
+    <#
+    .SYNOPSIS
+        Given a URL, this function returns the SHA256 hash of the file located at that address.
+
+    .DESCRIPTION
+        Given a URL, this function returns the SHA256 hash of the file located at that address.
+        Optionally, with the -Clipboard parameter, the hash will be written to the clipboard so that it can be pasted
+        into another application.
+
+    .INPUTS
+        Nothing can be piped (yet).
+
+    .OUTPUTS
+        A SHA256 hash of the file at the URL.
+
+    .EXAMPLE
+        Get-URLFileHash https://dl.google.com/tag/s/dl/chrome/install/googlechromestandaloneenterprise64.msi
+        
+        Returns the SHA256 hash of the googlechromesandaloneenterprise64.msi. 
+
+    #>
+   param (
+        # The URL to get the hash for.
         [Parameter(mandatory=$true)] 
-        [string]$url
+        [string]$url,
+        # Write the SHA256 hash to the clipboard.
+        [Parameter(HelpMessage="Write to clipboard?")]
+        [switch]$clipboard
         )
     $ProgressPreference = 'SilentlyContinue' 
     $ErrorActionPreference = 'Stop'
     Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
     $hash = Get-FileHash $env:TEMP\installer
     Remove-Item $env:TEMP\installer
-    Write-Host "The hash for the file at " $url "is "$hash.hash
-    Set-Clipboard $hash.hash
-    Write-Host "It has been written to the clipboard."
+    if ($clipboard) {
+      Set-Clipboard $hash.hash
+      Write-Host "The hash has been written to the clipboard."
+    }
+    return $hash.hash
 }
 
 function Get-GitHubReleases {
