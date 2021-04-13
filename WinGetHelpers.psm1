@@ -1,16 +1,46 @@
 #Requires -Module Carbon
 function Start-WinGetSandbox {
-  # The reason why this function so good is because I didn't write it, Felipe Santos (@felipecrs) did.
-  # I added a couple helper parameters for the rest of this module, which is why this is here. 
+  <#
+    .SYNOPSIS
+        Starts a Windows Sandbox with WinGet installed. 
+
+    .DESCRIPTION
+        Starts a Windows Sandbox with WinGet installed. Optionally, you can also send along a manifest
+        and it will be automatically with winget install -m. This function was originally written by Felipe Santos (@felipecrs),
+        and was modified to integrate with other functions in WinGetHelpers.
+
+        This function requires WinGet (for manifest verification), and Windows Sandbox to be installed on the host. To install 
+        Windows Sandbox, run ` Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClientVM' ` from an 
+        Administrator PowerShell.
+
+    .INPUTS
+        None.
+
+    .OUTPUTS
+        Depending on arguments, a .\tmp.log file may be written to the current directory containing
+        the output from the "winget install" and "winget list" commands ran inside the sandbox.
+
+    .EXAMPLE
+        Start-WinGetSandbox .\myManifest\ { myapp.exe -v}
+        Starts up a sandbox, installs the manifest at .\myManifest\, and runs myapp.exe -v. 
+
+    .NOTES
+        Detail on what the script does, if this is needed.
+
+    #>
   # Parse arguments
 
   Param(
+    # The Manifest to install in the Sandbox.
     [Parameter(Position = 0, HelpMessage = "The Manifest to install in the Sandbox.")]
     [String] $Manifest,
+    # The script to run in the Sandbox.
     [Parameter(Position = 1, HelpMessage = "The script to run in the Sandbox.")]
     [ScriptBlock] $Script,
+    # The folder to map in the Sandbox (if you don't want the current directory mapped)
     [Parameter(HelpMessage = "The folder to map in the Sandbox.")]
     [String] $MapFolder = $pwd,
+    # Pipe the output from winget install and winget list to .\tmp.log in the mapped folder.
     [Parameter(HelpMessage = "Automatically run manifest and send output to file.")]
     [Switch] $auto
   )
@@ -32,7 +62,7 @@ function Start-WinGetSandbox {
       throw 'The Manifest file does not exist.'
     }
 
-    $out = winget.exe validate $Manifest
+    winget.exe validate $Manifest | Out-Null
     if (-Not $?) {
       throw 'Manifest validation failed.'
     }
