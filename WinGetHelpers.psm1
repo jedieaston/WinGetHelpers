@@ -68,8 +68,8 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
 
   $desktopAppInstaller = @{
     fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    url      = 'https://github.com/microsoft/winget-cli/releases/download/v-0.2.10971-preview/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    hash     = '5AB2D4640DE31552A5C29C4358DB2AD476FC70ECD0A1489D187265FCDBA3D7D9'
+    url      = 'https://github.com/microsoft/winget-cli/releases/download/v-0.3.11102-preview/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
+    hash     = '10712301941ECC8803DD435C8B84FCD289157AE935D050F18604967B7C6FE267'
   }
 
   $vcLibs = @{
