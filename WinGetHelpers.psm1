@@ -65,11 +65,12 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
   Remove-Variable sandbox
 
   # Set dependencies
-
+  Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt" -OutFile $env:TMP\wingethash
+  $WinGetHash = Get-Content $env:TMP\wingethash
   $desktopAppInstaller = @{
     fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    url      = 'https://github.com/microsoft/winget-cli/releases/download/v-0.3.11102-preview/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    hash     = '10712301941ECC8803DD435C8B84FCD289157AE935D050F18604967B7C6FE267'
+    url      = 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
+    hash     = $WinGetHash
   }
 
   $vcLibs = @{
@@ -129,7 +130,7 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
         throw "Error downloading $($dependency.url) ."
       }
       if (-not ($dependency.hash -eq $(get-filehash $dependency.file).Hash)) {
-        throw 'Hashes do not match, try gain.'
+        throw 'Hashes do not match, try gain. (Expected ' + $dependency.hash + ', got ' + $(get-filehash $dependency.file).Hash
       }
     }
   }
