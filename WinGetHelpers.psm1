@@ -537,7 +537,7 @@ function Update-WinGetManifest {
     }
     # Now let's get these back to YAML.
     $path = ".\" + $newVersion + "\"
-    New-Item -Type Directory $path -Force 
+    New-Item -Type Directory $path -Force | Out-Null
 
     foreach($i in $newManifest.Keys) {
         if (($newManifest[$i].ManifestType.ToLower() -eq "singleton") -or ($newManifest[$i].ManifestType.ToLower() -eq "version")) {
@@ -752,15 +752,18 @@ function New-WinGetCommit {
   }
   if (-Not $currentBranch) {
     $branchName = $content.PackageIdentifier + "-" + $content.PackageVersion
-    git fetch --all
-    git checkout -b "$branchName" upstream/master
+    git fetch --all | Out-Null
+    git checkout -b "$branchName" upstream/master | Out-Null
     if($LASTEXITCODE -ne 0) {
       # The branch already exists.
       git checkout "$branchName"
     }
   }
-  git add "$manifest"
-  git commit -m $commitMessage
+  git add "$manifest" | Out-Null
+  git commit -m $commitMessage | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Commit failed."
+  }
 }
 function Get-WinGetApplicationCurrentVersion {
   # Uses the winget cli to get the current version of an app in the repo. 
