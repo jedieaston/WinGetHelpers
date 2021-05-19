@@ -86,8 +86,8 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
   }
   $settingsFile = @{
     fileName = 'settings.json'
-    url      = 'https://gist.github.com/jedieaston/28db9c14a50f18bc9731a14b2b1fd265/raw/a2b117acae3ecdf0fd25f71bda7b3fc0af9921be/settings.json'
-    hash     = '30DEFCF69EDAA7724FDBDDEBCA0CAD4BC027DDE0C2D349B7414972571EBAB94E'
+    url      = 'https://gist.githubusercontent.com/jedieaston/28db9c14a50f18bc9731a14b2b1fd265/raw/638bfacf2b3ad3e79c01089daff2197037564fa1/settings.json'
+    hash     = '3C8B5BC260908908BEC0A071AE0CBA5462493D3D4F1F8E0281FAA95FA54A6705'
   }
 
   $dependencies = @($desktopAppInstaller, $vcLibs, $vcLibsUwp, $settingsFile)
@@ -514,7 +514,7 @@ function Update-WinGetManifest {
         $i.InstallerSha256 = (Get-FileHash $env:TEMP\installer).Hash
         # Get Product Code if necessary
         if($i.Contains("ProductCode") -Or ($productCode)) {
-            $i.ProductCode = '{' + (((Get-MSI $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
+            $i.ProductCode = '{' + (((Get-CMsi $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
         }
     }
     # put the new installers array in the right place.
@@ -560,6 +560,11 @@ function Update-WinGetManifest {
         [System.IO.File]::WriteAllLines($fileName, $fileContent)
         # $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
         Write-Host $fileName "written." -ForegroundColor Green
+        if(Get-Content $fileName | Select-String "Ã") {
+          Write-Host ("UTF-8 Corruption detected in {0}" -f $fileName) -ForegroundColor Red
+          Write-Host ("Please resolve this manually before I continue.")
+          pause
+        }
     }
     # Get rid of the temporary manifest we created if we needed a conversion.
     if($converted) {
