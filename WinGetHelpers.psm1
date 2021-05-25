@@ -65,7 +65,7 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
   Remove-Variable sandbox
 
   # Set dependencies
-  Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt" -OutFile $env:TMP\wingethash
+  Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt" -UseBasicParsing -OutFile $env:TMP\wingethash
   $WinGetHash = Get-Content $env:TMP\wingethash
   $desktopAppInstaller = @{
     fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
@@ -242,6 +242,7 @@ Write-Host
 
   $sandboxTestWsbContent = @"
 <Configuration>
+  <vGPU>Enable</vGPU>
   <MappedFolders>
     <MappedFolder>
       <HostFolder>$tempFolder</HostFolder>
@@ -560,7 +561,7 @@ function Update-WinGetManifest {
         [System.IO.File]::WriteAllLines($fileName, $fileContent)
         # $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
         Write-Host $fileName "written." -ForegroundColor Green
-        if(Get-Content $fileName | Select-String "Ã") {
+        if(Get-Content $fileName | Select-String "Â") {
           Write-Host ("UTF-8 Corruption detected in {0}" -f $fileName) -ForegroundColor Red
           Write-Host ("Please resolve this manually before I continue.")
           pause
