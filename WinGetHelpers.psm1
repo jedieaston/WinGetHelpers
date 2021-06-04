@@ -12,8 +12,17 @@ function Start-WinGetSandbox {
     [Parameter(HelpMessage = "The folder to map in the Sandbox.")]
     [String] $MapFolder = $pwd,
     [Parameter(HelpMessage = "Automatically run manifest and send output to file.")]
-    [Switch] $auto
+    [Switch] $auto,
+    [Parameter(HelpMessage = "Check to make sure these values match the ARP table values")]
+    [Hashtable] $metadata = $null
   )
+
+  if($null -ne $metadata) {
+    # Ugly hack to unravel the metadata. Fix this easton.
+    $displayVersion = $metadata.PackageVersion
+    $displayName = $metadata.PackageName
+    $publisher = $metadata.Publisher
+  }
 
   $ErrorActionPreference = "Stop"
 
@@ -193,8 +202,7 @@ Update-Environment;
 Write-Host @'
 --> Getting list of installed applications...
 '@
-winget list | Add-Content .\tmp.log; 
-New-Item .\done;
+winget list | Add-Content .\tmp.log;
 "@
     }
     else {
@@ -212,6 +220,7 @@ Write-Host @'
 --> Getting list of installed applications...
 '@
 winget list;
+
 "@
     }
   }
@@ -227,7 +236,33 @@ $Script
 $Script
 "@
   }
-
+  if ($null -ne $metadata ) {
+   $bootstrapPs1Content += @"
+  Write-Host --> Checking the ARP table. 
+    if (Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
+       if(Test-Path .\tmp.log) {
+         'ARP check went great!' | Add-Content .\tmp.log ;
+         Write-Host HEY!
+       }
+       else {
+         Write-Host 'ARP check went great!' -ForegroundColor Green;
+       }
+  }   else {
+        if(Test-Path .\tmp.log) {
+         'ARP mismatch detected.' | Add-Content .\tmp.log ;
+       }
+       else {
+         Write-Host 'ARP mismatch detected.' -ForegroundColor Red;
+       }
+  }
+  ;
+"@
+  }
+  if ($auto) {
+    $bootstrapPs1Content += @"
+      New-Item .\done;
+"@
+  }
   $bootstrapPs1Content += @"
 Write-Host
 "@
@@ -355,13 +390,15 @@ function Test-WinGetManifest {
  [Parameter(HelpMessage="Keep the log file no matter what.")]
  [Switch]$keepLog,
  [Parameter(HelpMessage="Don't stop the function after 30 minutes.")]
- [Switch]$noStop
+ [Switch]$noStop,
+ [Parameter(HelpMessage="Check these values against the ARP table.")]
+ [hashtable] $metadata = $null
 ) 
   $ErrorActionPreference = 'Stop'
   Remove-Item ".\tmp.log" -ErrorAction "SilentlyContinue"
   Remove-Item ".\done" -ErrorAction "SilentlyContinue"
   $howManySeconds = 0
-  Start-WinGetSandbox $manifest -auto
+  Start-WinGetSandbox $manifest -auto -metadata $metadata
   Write-Host "Waiting for installation of" $manifest "to complete."
   while ((Test-Path -PathType Leaf ".\done") -ne $true) {
       # Write-Host "Waiting for file..."
@@ -379,6 +416,14 @@ function Test-WinGetManifest {
 
   $str = Select-String -Path ".\tmp.log" -Pattern "Successfully installed"
   if (-Not [string]::IsNullOrEmpty($str)) {
+      if ($null -ne $metadata) {
+        $str = Select-String -Path ".\tmp.log" -Pattern "ARP mismatch detected."
+        if(-Not [string]::IsNullOrEmpty($str)) {
+          Write-Host "Uh-oh! You wanted me to look for ARP errors, and I found one." -ForegroundColor Red
+          Write-Host "The sandbox will stay open so you can investigate."
+          return $false
+        }
+      }
       $sandbox = Get-Process 'WindowsSandboxClient' -ErrorAction SilentlyContinue
       if ($sandbox) {
           Write-Host '--> Closing Windows Sandbox'
@@ -421,7 +466,9 @@ function Update-WinGetManifest {
         [Parameter(HelpMessage="Attempt to auto replace the version number in the Installer URLs.")]
         [switch] $autoReplaceURL,
         [Parameter(HelpMessage="Run New-WinGetCommit if this function completes successfully.")]
-        [switch] $commit
+        [switch] $commit,
+        [Parameter(HelpMessage="Check the applicable metadata values against the ARP table.")]
+        [switch] $metadataCheck
     )
     # Just checking to ensure Carbon is available.
     Import-Module 'Carbon'
@@ -442,6 +489,7 @@ function Update-WinGetManifest {
       $converted = $false
     }
     $newManifest = @{}
+    $arpValues = $null
     foreach ($i in (Get-ChildItem -Path $oldManifestFolder)) {
         $content = (Get-Content ($oldManifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
         $newManifest.add($content.ManifestType, $content)
@@ -452,11 +500,23 @@ function Update-WinGetManifest {
         $installers = $newManifest.Installer.Installers
         $packageIdentifier = $newManifest.Installer.PackageIdentifier
         $oldVersion = $newManifest.Version.PackageVersion
+        if($checkArp) {
+          $arpValues = @{}
+          $arpValues.PackageVersion = $newVersion
+          $arpValues.PackageName = $newManifest.defaultLocale.PackageName
+          $arpValues.Publisher = $newManifest.defaultLocale.Publisher
+        }
     }
     else {
         $installers = $newManifest.singleton.Installers
         $packageIdentifier = $newManifest.singleton.PackageIdentifier
         $oldVersion = $newManifest.singleton.PackageVersion
+        if($checkArp) {
+          $arpValues = @{}
+          $arpValues.PackageVersion = $newVersion
+          $arpValues.PackageName = $newManifest.singleton.PackageName
+          $arpValues.Publisher = $newManifest.singleton.Publisher
+        }
     }
     # Make sure all architectures are lowercase in new manifest
     foreach($i in $installers) {
@@ -581,7 +641,12 @@ function Update-WinGetManifest {
         return $true
     }
     elseif ($silentTest) {
-      $testSuccess = Test-WinGetManifest $path
+      if ($metadataCheck) {
+        $testSuccess = Test-WinGetManifest $path -metadata $arpValues
+      }
+      else {
+        $testSuccess = Test-WinGetManifest $path
+      }
       if ($testSuccess) {
         Write-Host "Manifest successfully installed in Windows Sandbox!"
         if ($commit) {
@@ -787,4 +852,32 @@ function Get-WinGetApplicationCurrentVersion {
   try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
   catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
   return $version
+}
+
+function Get-WinGetManifestArpMetadata {
+   param (
+        [Parameter(Mandatory=$true, Position=0, HelpMessage="Path to manifest to be updated.")]
+        [string] $manifestFolder
+   )
+   $manifest = @{}
+   foreach ($i in (Get-ChildItem -Path $manifestFolder)) {
+        $content = (Get-Content ($manifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
+        $manifest.add($content.ManifestType, $content)
+    }
+   $type = Get-WinGetManifestType $manifestFolder
+   if ($type -eq "multifile") {
+      $arpValues = @{}
+      $arpValues.PackageVersion = $manifest.defaultLocale.PackageVersion
+      $arpValues.PackageName = $manifest.defaultLocale.PackageName
+      $arpValues.Publisher = $manifest.defaultLocale.Publisher
+    }
+    else {
+      $arpValues = @{}
+      $arpValues.PackageVersion = $manifest.singleTon.PackageVersion
+      $arpValues.PackageName = $manifest.singleton.PackageName
+      $arpValues.Publisher = $manifest.singleton.Publisher
+    }
+    return $arpValues
+
+
 }
