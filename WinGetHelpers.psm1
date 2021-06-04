@@ -637,7 +637,12 @@ function Update-WinGetManifest {
         throw "Manifest validation failed."
     }
     if ($test) {
-        Start-WinGetSandbox $path
+        if ($metadataCheck) {
+          Start-WinGetSandbox $path -metadata $arpValues
+        }
+        else {
+          Start-WinGetSandbox $path
+        }
         return $true
     }
     elseif ($silentTest) {
