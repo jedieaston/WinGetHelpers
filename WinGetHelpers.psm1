@@ -247,7 +247,26 @@ $Script
        else {
          Write-Host 'ARP check went great!' -ForegroundColor Green;
        }
-  }   else {
+      }
+    elseif (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
+       if(Test-Path .\tmp.log) {
+         'ARP check went great!' | Add-Content .\tmp.log ;
+         Write-Host HEY!
+       }
+       else {
+         Write-Host 'ARP check went great!' -ForegroundColor Green;
+       }
+    }
+    elseif (Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
+       if(Test-Path .\tmp.log) {
+         'ARP check went great!' | Add-Content .\tmp.log ;
+         Write-Host HEY!
+       }
+       else {
+         Write-Host 'ARP check went great!' -ForegroundColor Green;
+       }
+    }
+    else {
         if(Test-Path .\tmp.log) {
          'ARP mismatch detected.' | Add-Content .\tmp.log ;
        }
@@ -573,8 +592,14 @@ function Update-WinGetManifest {
         Write-Host 'Downloading installer for architecture'$i.Architecture'...' -ForegroundColor Yellow
         Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
         $i.InstallerSha256 = (Get-FileHash $env:TEMP\installer).Hash
+        if ($type -eq "multifile") {
+          $isMsi = ((($newManifest.Installer.InstallerType) -And ($newManifest.Installer.InstallerType -eq "msi")) -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn"))
+        }
+        else {
+          $isMsi = ((($newManifest.singleton.InstallerType) -And ($newManifest.singleton.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn")))
+        }
         # Get Product Code if necessary
-        if($i.Contains("ProductCode") -Or ($productCode)) {
+        if(($i.Contains("ProductCode") -Or ($productCode)) -And ($isMsi)) {
             $i.ProductCode = '{' + (((Get-CMsi $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
         }
     }
