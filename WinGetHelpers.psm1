@@ -74,18 +74,12 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
   Remove-Variable sandbox
 
   # Set dependencies
-  Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt" -UseBasicParsing -OutFile $env:TMP\wingethash
+  Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/download/v1.0.11692/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt" -UseBasicParsing -OutFile $env:TMP\wingethash
   $WinGetHash = Get-Content $env:TMP\wingethash
   $desktopAppInstaller = @{
     fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    url      = 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
+    url      = 'https://github.com/microsoft/winget-cli/releases/download/v1.0.11692/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
     hash     = $WinGetHash
-  }
-
-  $vcLibs = @{
-    fileName = 'Microsoft.VCLibs.140.00_14.0.27810.0_x64__8wekyb3d8bbwe.Appx'
-    url      = 'https://raw.githubusercontent.com/felipecassiors/winget-pkgs/da8548d90369eb8f69a4738dc1474caaffb58e12/Tools/SandboxTest_Temp/Microsoft.VCLibs.140.00_14.0.27810.0_x64__8wekyb3d8bbwe.Appx'
-    hash     = 'fe660c46a3ff8462d9574902e735687e92eeb835f75ec462a41ef76b54ef13ed'
   }
 
   $vcLibsUwp = @{
@@ -99,7 +93,7 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
     hash     = '3C8B5BC260908908BEC0A071AE0CBA5462493D3D4F1F8E0281FAA95FA54A6705'
   }
 
-  $dependencies = @($desktopAppInstaller, $vcLibs, $vcLibsUwp, $settingsFile)
+  $dependencies = @($desktopAppInstaller, $vcLibsUwp, $settingsFile)
 
   # Initialize Temp Folder
 
@@ -592,14 +586,14 @@ function Update-WinGetManifest {
         Write-Host 'Downloading installer for architecture'$i.Architecture'...' -ForegroundColor Yellow
         Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
         $i.InstallerSha256 = (Get-FileHash $env:TEMP\installer).Hash
-        if ($type -eq "multifile") {
-          $isMsi = ((($newManifest.Installer.InstallerType) -And ($newManifest.Installer.InstallerType -eq "msi")) -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn"))
-        }
-        else {
-          $isMsi = ((($newManifest.singleton.InstallerType) -And ($newManifest.singleton.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn")))
-        }
+        # if ($type -eq "multifile") {
+        #   $isMsi = ((($newManifest.Installer.InstallerType) -And ($newManifest.Installer.InstallerType -eq "msi")) -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn"))
+        # }
+        # else {
+        #   $isMsi = ((($newManifest.singleton.InstallerType) -And ($newManifest.singleton.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn")))
+        # }
         # Get Product Code if necessary
-        if(($i.Contains("ProductCode") -Or ($productCode)) -And ($isMsi)) {
+        if(($i.Contains("ProductCode") -Or ($productCode))) {
             $i.ProductCode = '{' + (((Get-CMsi $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
         }
     }
