@@ -504,8 +504,13 @@ function Update-WinGetManifest {
     $newManifest = @{}
     $arpValues = $null
     foreach ($i in (Get-ChildItem -Path $oldManifestFolder)) {
-        $content = (Get-Content ($oldManifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered)
-        $newManifest.add($content.ManifestType, $content)
+        $content = (Get-Content ($oldManifestFolder + "\" + $i) -Encoding UTF8 | ConvertFrom-Yaml -Ordered)
+        if ($content.ManifestType -eq 'locale') {
+          $newManifest.add(($content.ManifestType + "-" + $content.PackageLocale), $content)
+        }
+        else {
+          $newManifest.add($content.ManifestType, $content)
+        }
     }
     # Now for the updating!
     # Get the installers array and the PackageIdentifier
@@ -561,16 +566,16 @@ function Update-WinGetManifest {
     if (($installers.Length -eq 1) -And (-Not [String]::IsNullOrEmpty($newURL))) {
         $urlMap = @{$installers[0].Architecture = $newURL}
     }
-    elseif ($autoReplaceURL) {
-        $urlMap = @{}
-        foreach ($i in $installers) {
-            $urlMap[$i.Architecture] = $i.InstallerUrl -Replace $oldVersion, $newVersion
-            Write-Host "Auto-replace for arch" $i.Architecture "resulted in URL "$urlMap[$i.Architecture] -ForegroundColor Yellow
-        }
-    }
-    if ($urlMap.Count -ne $installers.Length) {
+    # elseif ($autoReplaceURL) {
+    #     $urlMap = @{}
+    #     foreach ($i in $installers) {
+    #         $urlMap[$i.Architecture] = $i.InstallerUrl -Replace $oldVersion, $newVersion
+    #         Write-Host "Auto-replace for arch" $i.Architecture "resulted in URL "$urlMap[$i.Architecture] -ForegroundColor Yellow
+    #     }
+    # }
+    if ($urlMap.Count -ne $installers.Length -And (-Not $autoReplaceURL)) {
         foreach($i in $installers) {
-            if (-Not ($urlMap.ContainsKey($i.Architecture))) {
+            if (-Not ($urlMap.ContainsKey($i.Architecture) -And $autoReplaceURL)) {
                 # The user didn't specify this URL.
                 Write-Host "What is the Installer URL for architecture "$i.Architecture"?"
                 $urlMap[$i.Architecture] = Read-Host $i.InstallerUrl
@@ -581,7 +586,13 @@ function Update-WinGetManifest {
     
     # Let's download the installers and get the needed info.
     foreach($i in $installers) {
-        $url = $urlMap[$i.Architecture]
+        if ($autoReplaceURL) {
+          $url = $i.InstallerUrl -Replace $oldVersion, $newVersion
+          Write-Host "Auto-replace for arch" $i.Architecture "resulted in URL " $url -ForegroundColor Yellow
+        }
+        else {
+          $url = $urlMap[$i.Architecture]
+        }
         $i.InstallerUrl = $url
         Write-Host 'Downloading installer for architecture'$i.Architecture'...' -ForegroundColor Yellow
         Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
