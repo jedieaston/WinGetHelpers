@@ -352,13 +352,10 @@ function Get-WinGetManifestType {
       throw "This isn't a folder, this is a file!"
   }
   
-  foreach($i in (Get-ChildItem -Path $manifestFolder)) {
-      $theSplitName = $i.Name.Split(".")
-      if ($theSplitName.length -ge 3) {
-         $manifest = Get-Content ($manifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered
-         if (($manifest.ManifestType.ToLower() -eq "version") -or $manifest.ManifestType.ToLower() -eq "singleton") {
+  foreach($i in (Get-ChildItem -Path $manifestFolder -File)) {
+      $manifest = Get-Content ($manifestFolder + "\" + $i) | ConvertFrom-Yaml -Ordered
+      if (($manifest.ManifestType.ToLower() -eq "version") -or $manifest.ManifestType.ToLower() -eq "singleton") {
           break
-         }
       }
   }
   if ($manifest.ManifestType.ToLower() -eq "version") {
@@ -373,19 +370,43 @@ function Get-WinGetManifestType {
 }
 
 function Get-URLFileHash {
-    param (
+    <#
+    .SYNOPSIS
+        Given a URL, this function returns the SHA256 hash of the file located at that address.
+    .DESCRIPTION
+        Given a URL, this function returns the SHA256 hash of the file located at that address.
+        Optionally, with the -Clipboard parameter, the hash will be written to the clipboard so that it can be pasted
+        into another application.
+    .INPUTS
+        Nothing can be piped (yet).
+    .OUTPUTS
+        A SHA256 hash of the file at the URL.
+    .EXAMPLE
+        Get-URLFileHash https://dl.google.com/tag/s/dl/chrome/install/googlechromestandaloneenterprise64.msi
+        
+        Returns the SHA256 hash of the googlechromesandaloneenterprise64.msi. 
+    #>
+   param (
+        # The URL to get the hash for.
         [Parameter(mandatory=$true)] 
-        [string]$url
+        [string]$url,
+        # Write the SHA256 hash to the clipboard.
+        [Parameter(HelpMessage="Write to clipboard?")]
+        [switch]$clipboard
         )
     $ProgressPreference = 'SilentlyContinue' 
     $ErrorActionPreference = 'Stop'
     Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
     $hash = Get-FileHash $env:TEMP\installer
     Remove-Item $env:TEMP\installer
-    Write-Host "The hash for the file at " $url "is "$hash.hash
-    Set-Clipboard $hash.hash
-    Write-Host "It has been written to the clipboard."
+    if ($clipboard) {
+      Set-Clipboard $hash.hash
+      Write-Host "The hash has been written to the clipboard."
+    }
+    return $hash.hash
 }
+
+
 
 function Get-GitHubReleases {
     # Requires the GitHub CLI!
@@ -575,7 +596,7 @@ function Update-WinGetManifest {
     # }
     if ($urlMap.Count -ne $installers.Length -And (-Not $autoReplaceURL)) {
         foreach($i in $installers) {
-            if (-Not ($urlMap.ContainsKey($i.Architecture) -And $autoReplaceURL)) {
+            if (-Not ($urlMap.ContainsKey($i.Architecture))) {
                 # The user didn't specify this URL.
                 Write-Host "What is the Installer URL for architecture "$i.Architecture"?"
                 $urlMap[$i.Architecture] = Read-Host $i.InstallerUrl
@@ -646,7 +667,12 @@ function Update-WinGetManifest {
         # Add schema info for IntelliSense
         $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
         # And the manifest...
-        $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
+        if (($newManifest[$i].ManifestType.ToLower() -ne "locale") -And ($newManifest[$i].ManifestType.ToLower() -ne "defaultlocale")) {
+          $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
+        }
+        else {
+          $fileContent += $newManifest[$i] | ConvertTo-Yaml
+        }
         [System.Environment]::CurrentDirectory = (Get-Location).Path
         [System.IO.File]::WriteAllLines($fileName, $fileContent)
         # $fileContent | Out-File -Encoding "utf8" -FilePath $fileName
@@ -880,7 +906,7 @@ function Get-WinGetApplicationCurrentVersion {
   )
 
   winget source update | Out-Null
-  $littleManifest = (winget show $id)
+  $littleManifest = (winget show $id --source winget)
   if ($LASTEXITCODE -ne 0) {
     throw "Couldn't find manifest " + $id
   }
