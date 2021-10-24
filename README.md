@@ -1,16 +1,32 @@
 # WinGetHelpers!
 
-__Now updated for 1.0 manifests!__
+This is a PowerShell module that contains a collection of helper functions to make creation/submission of manifests easy for [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs).
 
+## Dependencies
 
-These are some cmdlets I hastely made to help support microsoft/winget-pkgs. Maybe they'll help you too. 
+This PowerShell module requires the following dependencies:
 
-I'm not very good at PowerShell, which is why it looks so bad, but all of these work on my machine(tm) so as long as you are on Windows 10 and have winget installed,
-they should all work for you too (except Get-GitHubReleases, which requires the GitHub CLI. I'll fix that eventually.) I'll add comments when I get time.
+| Dependency | Why it's needed |
+| --- | --- |
+| Carbon | For getting the Product Code from MSI files |
+| powershell-yaml | To parse the YAML files |
 
-# Requirements
+You can install both of these at once with the following command:
+```
+Install-Module powershell-yaml; Install-Module -Name Carbon
+```
 
-You'll need two dependencies: [Carbon](http://get-carbon.org/) (for getting the product code from MSI files) and [powershell-yaml](https://github.com/cloudbase/powershell-yaml) (to read and write YAML files). 
+## Cmdlets/Functions in this module
 
-So before you download this module and put it in your modules folder, make sure to do ` Install-Module powershell-yaml; Install-Module -Name 'Carbon' `
+This module contains the following cmdlets/functions:
 
+| Cmdlet | Description |
+| --- | --- |
+| Get-URLFileHash | Gets the SHA256 hash of a file from a URL, optionally with a `-Clipboard` parameter to copy the hash to the clipboard |
+| Get-GitHubReleases | Gets the latest 5 releases from a GitHub repository |
+| Test-WinGetManifest | Tests the generated manifest in Sandbox to ensure that it installs correctly and doesn't have any ARP errors |
+| Update-WinGetManifest | Generate a manifest for an updated package and optionally test it in Windows Sandbox |
+| Convert-WinGetSingletonToMultiFile | Converts a singleton manifest to a multi-file manifest |
+| New-WinGetCommit | Commit the modified manifest to the repository to submit a Pull Request |
+| Get-WinGetApplicationCurrentVersion | Uses WinGet CLI to get the current version of an application |
+| Get-WinGetManifestArpMetadata | Gets the ARP metadata from a manifest |
