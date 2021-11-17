@@ -1,6 +1,6 @@
 # WinGetHelpers!
 
-__Now updated for 1.0 manifests__
+__Now updated for 1.0 manifests!__
 
 I hastily made this PowerShell module, that contains a collection of helper functions to make creation/submission of manifests easy for [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Maybe it will be useful for you too.
 
