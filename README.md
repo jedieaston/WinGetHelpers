@@ -2,7 +2,7 @@
 
 __Now updated for 1.0 manifests__
 
-I hastily made this PowerShell module, that contains a collection of helper functions to make creation/submission of manifests easy for [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Maybe it will be useful for other people too.
+I hastily made this PowerShell module, that contains a collection of helper functions to make creation/submission of manifests easy for [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Maybe it will be useful for you too.
 
 I'm not good at PowerShell, which is why it looks like it's a bit of a mess. But it works on my machine (Windows 10 with WinGet installed) and I'm happy to share it with the community.
 
