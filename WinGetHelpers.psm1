@@ -85,7 +85,7 @@ $ Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClien
   $vcLibsUwp = @{
     fileName = 'Microsoft.VCLibs.x64.14.00.Desktop.appx'
     url      = 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx'
-    hash     = '6602159c341bafea747d0edf15669ac72df8817299fbfaa90469909e06794256'
+    hash     = 'A39CEC0E70BE9E3E48801B871C034872F1D7E5E8EEBE986198C019CF2C271040'
   }
   $settingsFile = @{
     fileName = 'settings.json'
@@ -561,6 +561,23 @@ function Update-WinGetManifest {
     foreach($i in $installers) {
         $i.Architecture = $i.Architecture.ToLower()
     }
+    # Make sure ProductCode is denormalized.
+    if ($type -eq "multifile") {
+      if ($newManifest.Installer.Contains("ProductCode")) {
+        foreach ($i in $installers) {
+          $i.ProductCode = $newManifest.Installer.ProductCode
+        }
+        $newManifest.Installer.Remove("ProductCode")
+      }
+    }
+    if ($type -eq "singleton") {
+      if ($newManifest.singleton.Contains("ProductCode")) {
+        foreach ($i in $installers) {
+          $i.ProductCode = $newManifest.singleton.ProductCode
+        }
+        $newManifest.singleton.Remove("ProductCode")
+      }
+    }
     foreach($i in $urlMap.Keys) {
         # Add non existing architectures.
         $inManifest = $false
@@ -616,7 +633,7 @@ function Update-WinGetManifest {
         }
         $i.InstallerUrl = $url
         Write-Host 'Downloading installer for architecture'$i.Architecture'...' -ForegroundColor Yellow
-        Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\installer $url
+        Invoke-WebRequest -UseBasicParsing -UserAgent "winget/1.0" -OutFile $env:TEMP\installer $url
         $i.InstallerSha256 = (Get-FileHash $env:TEMP\installer).Hash
         # if ($type -eq "multifile") {
         #   $isMsi = ((($newManifest.Installer.InstallerType) -And ($newManifest.Installer.InstallerType -eq "msi")) -Or ($i.InstallerType.ToLower() -eq "msi") -Or ($i.InstallerType.ToLower -eq "burn"))
@@ -910,8 +927,10 @@ function Get-WinGetApplicationCurrentVersion {
   if ($LASTEXITCODE -ne 0) {
     throw "Couldn't find manifest " + $id
   }
-  try { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
-  catch { $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version }
+  try { $version = ($littleManifest | Select-Object -Skip 1 | Out-String | ConvertFrom-Yaml).version }
+  catch { 
+    $version = ($littleManifest | Select-Object -Skip 2 | Out-String | ConvertFrom-Yaml).version 
+  }
   return $version
 }
 
