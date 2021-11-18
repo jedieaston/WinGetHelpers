@@ -142,37 +142,37 @@ You can run the following command in an elevated PowerShell for enabling Windows
 
   # Create Bootstrap script
 
-  # See: https://stackoverflow.com/a/14382047/12156188
   $bootstrapPs1Content = @'
-  function Update-Environment {
-    $locations = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
-                 'HKCU:\Environment'
-    $locations | ForEach-Object {
-      $k = Get-Item $_
-      $k.GetValueNames() | ForEach-Object {
-        $name  = $_
-        $value = $k.GetValue($_)
-        if ($userLocation -and $name -ieq 'PATH') {
-          $Env:Path += ";$value"
-        } else {
-          Set-Item -Path Env:$name -Value $value
-        }
+function Update-Environment {
+  $locations = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
+               'HKCU:\Environment'
+  $locations | ForEach-Object {
+    $k = Get-Item $_
+    $k.GetValueNames() | ForEach-Object {
+      $name  = $_
+      $value = $k.GetValue($_)
+      if ($userLocation -and $name -ieq 'PATH') {
+        $Env:Path += ";$value"
+      } else {
+        Set-Item -Path Env:$name -Value $value
       }
-      $userLocation = $true
     }
+    $userLocation = $true
   }
+}
 '@
 
   $bootstrapPs1Content += @"
-  Write-Host @'
-  --> Installing WinGet
-  '@
-  Add-AppxPackage -Path '$($desktopAppInstaller.pathInSandbox)' -DependencyPath '$($vcLibsUwp.pathInSandbox)'
-  Copy-Item '$($settingsFile.pathInSandbox)' 'C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json'
-  Write-Host @'
-  Tip: you can type 'Update-Environment' to update your environment variables, such as after installing a new software.
-  '@
+Write-Host @'
+--> Installing WinGet
+'@
+Add-AppxPackage -Path '$($desktopAppInstaller.pathInSandbox)' -DependencyPath '$($vcLibsUwp.pathInSandbox)'
+Copy-Item '$($settingsFile.pathInSandbox)' 'C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json'
+Write-Host @'
+Tip: you can type 'Update-Environment' to update your environment variables, such as after installing a new software.
+'@
 "@
+
 
   if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
     $manifestFileName = Split-Path $Manifest -Leaf
@@ -184,100 +184,99 @@ You can run the following command in an elevated PowerShell for enabling Windows
     Write-Host $manifestPathInSandbox
     if ($auto) {
       $bootstrapPs1Content += @"
-  Write-Host @'
-  --> Installing the Manifest $manifestFileName
-  '@
-  Write-Host '$manifestPathInSandbox';
-  winget install -m '$manifestPathInSandbox' | Out-File .\tmp.log
-  Write-Host @'
-  --> Refreshing environment variables
-  '@
-  Update-Environment;
-  Write-Host @'
-  --> Getting list of installed applications...
-  '@
-  winget list | Add-Content .\tmp.log;
+Write-Host @'
+--> Installing the Manifest $manifestFileName
+'@
+Write-Host '$manifestPathInSandbox';
+winget install -m '$manifestPathInSandbox' | Out-File .\tmp.log
+Write-Host @'
+--> Refreshing environment variables
+'@
+Update-Environment;
+Write-Host @'
+--> Getting list of installed applications...
+'@
+winget list | Add-Content .\tmp.log;
 "@
     }
     else {
       $bootstrapPs1Content += @"
-  Write-Host @'
-  --> Installing the Manifest $manifestFileName
-  '@
-  Write-Host '$manifestPathInSandbox';
-  winget install -m '$manifestPathInSandbox'
-  Write-Host @'
-  --> Refreshing environment variables
-  '@
-  Update-Environment;
-  Write-Host @'
-  --> Getting list of installed applications...
-  '@
-  winget list;
-
+Write-Host @'
+--> Installing the Manifest $manifestFileName
+'@
+Write-Host '$manifestPathInSandbox';
+winget install -m '$manifestPathInSandbox'
+Write-Host @'
+--> Refreshing environment variables
+'@
+Update-Environment;
+Write-Host @'
+--> Getting list of installed applications...
+'@
+winget list;
 "@
     }
   }
 
   if (-Not [String]::IsNullOrWhiteSpace($Script)) {
     $bootstrapPs1Content += @"
-  Write-Host @'
-  --> Running the following script:
-  {
-  $Script
-  }
-  '@
-  $Script
+Write-Host @'
+--> Running the following script:
+{
+$Script
+}
+'@
+$Script
 "@
   }
   if ($null -ne $metadata ) {
-    $bootstrapPs1Content += @"
-    Write-Host --> Checking the ARP table.
-      if (Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
-         if(Test-Path .\tmp.log) {
-           'ARP check went great!' | Add-Content .\tmp.log ;
-           Write-Host HEY!
-         }
-         else {
-           Write-Host 'ARP check went great!' -ForegroundColor Green;
-         }
-        }
-      elseif (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
-         if(Test-Path .\tmp.log) {
-           'ARP check went great!' | Add-Content .\tmp.log ;
-           Write-Host HEY!
-         }
-         else {
-           Write-Host 'ARP check went great!' -ForegroundColor Green;
-         }
+   $bootstrapPs1Content += @"
+  Write-Host --> Checking the ARP table. 
+    if (Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
+       if(Test-Path .\tmp.log) {
+         'ARP check went great!' | Add-Content .\tmp.log ;
+         Write-Host HEY!
+       }
+       else {
+         Write-Host 'ARP check went great!' -ForegroundColor Green;
+       }
       }
-      elseif (Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
-         if(Test-Path .\tmp.log) {
-           'ARP check went great!' | Add-Content .\tmp.log ;
-           Write-Host HEY!
-         }
-         else {
-           Write-Host 'ARP check went great!' -ForegroundColor Green;
-         }
-      }
-      else {
-          if(Test-Path .\tmp.log) {
-           'ARP mismatch detected.' | Add-Content .\tmp.log ;
-         }
-         else {
-           Write-Host 'ARP mismatch detected.' -ForegroundColor Red;
-         }
+    elseif (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
+       if(Test-Path .\tmp.log) {
+         'ARP check went great!' | Add-Content .\tmp.log ;
+         Write-Host HEY!
+       }
+       else {
+         Write-Host 'ARP check went great!' -ForegroundColor Green;
+       }
     }
-    ;
+    elseif (Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate  | Where-Object DisplayVersion -eq '$displayVersion' | Where-Object DisplayName -eq '$displayName' | Where-Object Publisher -eq '$publisher') {
+       if(Test-Path .\tmp.log) {
+         'ARP check went great!' | Add-Content .\tmp.log ;
+         Write-Host HEY!
+       }
+       else {
+         Write-Host 'ARP check went great!' -ForegroundColor Green;
+       }
+    }
+    else {
+        if(Test-Path .\tmp.log) {
+         'ARP mismatch detected.' | Add-Content .\tmp.log ;
+       }
+       else {
+         Write-Host 'ARP mismatch detected.' -ForegroundColor Red;
+       }
+  }
+  ;
 "@
   }
   if ($auto) {
     $bootstrapPs1Content += @"
-        New-Item .\done;
+      New-Item .\done;
 "@
   }
   $bootstrapPs1Content += @"
-  Write-Host
+Write-Host
 "@
 
   $bootstrapPs1FileName = 'Bootstrap.ps1'
@@ -289,21 +288,21 @@ You can run the following command in an elevated PowerShell for enabling Windows
   $mapFolderInSandbox = Join-Path -Path $desktopInSandbox -ChildPath (Split-Path -Path $mapFolder -Leaf)
 
   $sandboxTestWsbContent = @"
-  <Configuration>
-    <vGPU>Enable</vGPU>
-    <MappedFolders>
-      <MappedFolder>
-        <HostFolder>$tempFolder</HostFolder>
-        <ReadOnly>true</ReadOnly>
-      </MappedFolder>
-      <MappedFolder>
-        <HostFolder>$mapFolder</HostFolder>
-      </MappedFolder>
-    </MappedFolders>
-    <LogonCommand>
-    <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$mapFolderInSandbox' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $bootstrapPs1InSandbox'</Command>
-    </LogonCommand>
-  </Configuration>
+<Configuration>
+  <vGPU>Enable</vGPU>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>$tempFolder</HostFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>$mapFolder</HostFolder>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+  <Command>PowerShell Start-Process PowerShell -WindowStyle Maximized -WorkingDirectory '$mapFolderInSandbox' -ArgumentList '-ExecutionPolicy Bypass -NoExit -NoLogo -File $bootstrapPs1InSandbox'</Command>
+  </LogonCommand>
+</Configuration>
 "@
 
   $sandboxTestWsbFileName = 'SandboxTest.wsb'
@@ -311,33 +310,33 @@ You can run the following command in an elevated PowerShell for enabling Windows
   $sandboxTestWsbContent | Out-File $sandboxTestWsbFile
 
   Write-Host @"
-  --> Starting Windows Sandbox, and:
-      - Mounting the following directories:
-        - $tempFolder as read-only
-        - $mapFolder as read-and-write
-      - Installing WinGet
+--> Starting Windows Sandbox, and:
+    - Mounting the following directories:
+      - $tempFolder as read-only
+      - $mapFolder as read-and-write
+    - Installing WinGet
 "@
 
   if (-Not [String]::IsNullOrWhiteSpace($Manifest)) {
     Write-Host @"
-      - Installing the Manifest $manifestFileName
-      - Refreshing environment variables
-      - Getting a list of installed applications and their product codes
+    - Installing the Manifest $manifestFileName
+    - Refreshing environment variables
+    - Getting a list of installed applications and their product codes
 "@
   }
 
   if (-Not [String]::IsNullOrWhiteSpace($Script)) {
     Write-Host @"
-      - Running the following script:
-  {
-  $Script
-  }
+    - Running the following script:
+{
+$Script
+}
 "@
   }
 
   Write-Host
 
-  WindowsSandbox $SandboxTestWsbFile
+  WindowsSandbox $SandboxTestWsbFile  
 
 }
 function Get-WinGetManifestType {
