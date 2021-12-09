@@ -678,7 +678,7 @@ function Update-WinGetManifest {
       throw $newManifest[$i].ManifestType.ToLower() + " is an unknown type."
     }
     # Add schema info for IntelliSense
-    $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.1.0.0.schema.json' + "`r`n"
+    $fileContent = '# yaml-language-server: $schema=https://aka.ms/winget-manifest.' + $newManifest[$i].ManifestType.ToLower() + '.' + $newManifest[$i].ManifestVersion.ToLower() + '.schema.json' + "`r`n"
     # And the manifest...
     if (($newManifest[$i].ManifestType.ToLower() -ne "locale") -And ($newManifest[$i].ManifestType.ToLower() -ne "defaultlocale")) {
       $fileContent += ($newManifest[$i] | ConvertTo-Yaml).replace("'", '"')
