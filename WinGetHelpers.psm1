@@ -74,13 +74,35 @@ You can run the following command in an elevated PowerShell for enabling Windows
   Remove-Variable sandbox
 
   # Set dependencies
-  Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/download/v1.0.11692/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt" -UseBasicParsing -OutFile $env:TMP\wingethash
-  $WinGetHash = Get-Content $env:TMP\wingethash
-  $desktopAppInstaller = @{
-    fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle'
-    url      = 'https://github.com/microsoft/winget-cli/releases/download/v1.0.11692/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
-    hash     = $WinGetHash
+
+  $apiLatestUrl = 'https://api.github.com/repos/microsoft/winget-cli/releases/latest'
+
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  $WebClient = New-Object System.Net.WebClient
+
+  function Get-LatestUrl {
+    ((Invoke-WebRequest $apiLatestUrl -UseBasicParsing | ConvertFrom-Json).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle$' }).browser_download_url
   }
+
+  function Get-LatestHash {
+    $shaUrl = ((Invoke-WebRequest $apiLatestUrl -UseBasicParsing | ConvertFrom-Json).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt$' }).browser_download_url
+
+    $shaFile = Join-Path -Path $env:TEMP -ChildPath 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt'
+    $WebClient.DownloadFile($shaUrl, $shaFile)
+
+    Get-Content $shaFile
+}
+
+  # Hide the progress bar of Invoke-WebRequest
+  # $oldProgressPreference = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+
+  $desktopAppInstaller = @{
+    fileName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
+    url      = $(Get-LatestUrl)
+    hash     = $(Get-LatestHash)
+  }
+
 
   $vcLibsUwp = @{
     fileName = 'Microsoft.VCLibs.x64.14.00.Desktop.appx'
@@ -170,7 +192,12 @@ Add-AppxPackage -Path '$($desktopAppInstaller.pathInSandbox)' -DependencyPath '$
 Copy-Item '$($settingsFile.pathInSandbox)' 'C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json'
 Write-Host @'
 Tip: you can type 'Update-Environment' to update your environment variables, such as after installing a new software.
+Write-Host @'
+--> Changing winget settings for testing (disabling msstore and enabling local manifest installation).
 '@
+winget settings --Enable LocalManifestFiles
+winget source remove msstore
+
 "@
 
 
