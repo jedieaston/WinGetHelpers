@@ -75,17 +75,18 @@ You can run the following command in an elevated PowerShell for enabling Windows
 
   # Set dependencies
 
-  $apiLatestUrl = 'https://api.github.com/repos/microsoft/winget-cli/releases/latest'
+  $apiJson = (Invoke-WebRequest 'https://api.github.com/repos/microsoft/winget-cli/releases' -UseBasicParsing | ConvertFrom-Json)[0]
+
 
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
   $WebClient = New-Object System.Net.WebClient
 
   function Get-LatestUrl {
-    ((Invoke-WebRequest $apiLatestUrl -UseBasicParsing | ConvertFrom-Json).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle$' }).browser_download_url
+    (($apiJson).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle$' }).browser_download_url
   }
 
   function Get-LatestHash {
-    $shaUrl = ((Invoke-WebRequest $apiLatestUrl -UseBasicParsing | ConvertFrom-Json).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt$' }).browser_download_url
+    $shaUrl = (($apiJson).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt$' }).browser_download_url
 
     $shaFile = Join-Path -Path $env:TEMP -ChildPath 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt'
     $WebClient.DownloadFile($shaUrl, $shaFile)
@@ -102,7 +103,11 @@ You can run the following command in an elevated PowerShell for enabling Windows
     url      = $(Get-LatestUrl)
     hash     = $(Get-LatestHash)
   }
-
+  $uiLibsUwp = @{
+    fileName = 'Microsoft.UI.Xaml.2.7.appx'
+    url = "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/d1a3bf2c-f6ed-4ee6-89eb-5fab766c9435?P1=1642689628&P2=404&P3=2&P4=eUKsc6x4U18BmCNsUNQGKip6%2b2UfeorbQ9QGKny2F4B%2fH1ktNGfvHUA1zZCMAUfao6XmXQL90QDkHSP32ZRlXQ%3d%3d"
+    hash = "A1383B52FFBEC425DDE99287E69616634E12C5DD0BEFCAB70CCF70FC401C8BE2"
+  }
 
   $vcLibsUwp = @{
     fileName = 'Microsoft.VCLibs.x64.14.00.Desktop.appx'
@@ -111,11 +116,11 @@ You can run the following command in an elevated PowerShell for enabling Windows
   }
   $settingsFile = @{
     fileName = 'settings.json'
-    url      = 'https://gist.githubusercontent.com/jedieaston/28db9c14a50f18bc9731a14b2b1fd265/raw/638bfacf2b3ad3e79c01089daff2197037564fa1/settings.json'
-    hash     = '3C8B5BC260908908BEC0A071AE0CBA5462493D3D4F1F8E0281FAA95FA54A6705'
+    url      = 'https://gist.githubusercontent.com/jedieaston/28db9c14a50f18bc9731a14b2b1fd265/raw/c0370686c60b6cca8566a93112f7689a55d34d67/settings.json'
+    hash     = 'BBDC9B3CA350576FD292AB7D7DF224B8D2B8E1DF387F4C776B57A9D1D0D1BED5'
   }
 
-  $dependencies = @($desktopAppInstaller, $vcLibsUwp, $settingsFile)
+  $dependencies = @($desktopAppInstaller, $vcLibsUwp, $settingsFile, $uiLibsUwp)
 
   # Initialize Temp Folder
 
@@ -188,6 +193,7 @@ function Update-Environment {
 Write-Host @'
 --> Installing WinGet
 '@
+Add-AppxPackage -Path '$($uiLibsUwp.pathInSandbox)'
 Add-AppxPackage -Path '$($desktopAppInstaller.pathInSandbox)' -DependencyPath '$($vcLibsUwp.pathInSandbox)'
 Copy-Item '$($settingsFile.pathInSandbox)' 'C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json'
 Write-Host @'
