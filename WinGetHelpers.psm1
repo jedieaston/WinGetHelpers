@@ -104,9 +104,9 @@ You can run the following command in an elevated PowerShell for enabling Windows
     hash     = $(Get-LatestHash)
   }
   $uiLibsUwp = @{
-    fileName = 'Microsoft.UI.Xaml.2.7.appx'
-    url = "http://tlu.dl.delivery.mp.microsoft.com/filestreamingservice/files/d1a3bf2c-f6ed-4ee6-89eb-5fab766c9435?P1=1642689628&P2=404&P3=2&P4=eUKsc6x4U18BmCNsUNQGKip6%2b2UfeorbQ9QGKny2F4B%2fH1ktNGfvHUA1zZCMAUfao6XmXQL90QDkHSP32ZRlXQ%3d%3d"
-    hash = "A1383B52FFBEC425DDE99287E69616634E12C5DD0BEFCAB70CCF70FC401C8BE2"
+    fileName = 'Microsoft.UI.Xaml.2.7.zip'
+    url = 'https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.7.0'
+    hash = "422FD24B231E87A842C4DAEABC6A335112E0D35B86FAC91F5CE7CF327E36A591"
   }
 
   $vcLibsUwp = @{
@@ -193,7 +193,8 @@ function Update-Environment {
 Write-Host @'
 --> Installing WinGet
 '@
-Add-AppxPackage -Path '$($uiLibsUwp.pathInSandbox)'
+Expand-Archive '$($uiLibsUwp.pathInSandbox)' ~\Desktop\xaml\
+Add-AppxPackage ~\Desktop\xaml\tools\AppX\x64\Release\Microsoft.UI.Xaml.2.7.appx
 Add-AppxPackage -Path '$($desktopAppInstaller.pathInSandbox)' -DependencyPath '$($vcLibsUwp.pathInSandbox)'
 Copy-Item '$($settingsFile.pathInSandbox)' 'C:\Users\WDAGUtilityAccount\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json'
 Write-Host @'
