@@ -86,9 +86,9 @@ You can run the following command in an elevated PowerShell for enabling Windows
   }
 
   function Get-LatestHash {
-    $shaUrl = (($apiJson).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt$' }).browser_download_url
-
+    $shaUrl = (($apiJson).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3db8bbwe.txt$' }).browser_download_url
     $shaFile = Join-Path -Path $env:TEMP -ChildPath 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt'
+    
     $WebClient.DownloadFile($shaUrl, $shaFile)
 
     Get-Content $shaFile
