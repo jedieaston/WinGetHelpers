@@ -86,11 +86,9 @@ You can run the following command in an elevated PowerShell for enabling Windows
   }
 
   function Get-LatestHash {
-    $shaUrl = (($apiJson).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3db8bbwe.txt$' }).browser_download_url
+    $shaUrl = (($apiJson).assets | Where-Object { $_.name -match '^Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt$' }).browser_download_url
     $shaFile = Join-Path -Path $env:TEMP -ChildPath 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.txt'
-    
     $WebClient.DownloadFile($shaUrl, $shaFile)
-
     Get-Content $shaFile
 }
 
@@ -532,7 +530,9 @@ function Update-WinGetManifest {
     [Parameter(HelpMessage = "Run New-WinGetCommit if this function completes successfully.")]
     [switch] $commit,
     [Parameter(HelpMessage = "Check the applicable metadata values against the ARP table.")]
-    [switch] $metadataCheck
+    [switch] $metadataCheck,
+    [Parameter(HelpMessage = "The release date for this manifest (default: today")]
+    [string] $releaseDate = (Get-Date -f "yyyy-MM-dd")
   )
   # Just checking to ensure Carbon is available.
   Import-Module 'Carbon'
@@ -694,6 +694,31 @@ function Update-WinGetManifest {
   else {
     $newManifest.singleton.PackageVersion = $newVersion
   }
+
+  # Check if ReleaseNotes/ReleaseDate/ReleaseNotesURL is set.
+  if ($type -eq "multifile")
+  {
+    if ($newManifest.defaultLocale.Contains("ReleaseNotes") -or $newManifest.defaultLocale.Contains("ReleaseNotesUrl") -or $newManifest.installer.Contains("ReleaseDate"))
+    {
+      Write-Host -ForegroundColor Yellow "Warning! Something about the ReleaseNotes was set in the previous manifest. Please manually correct it."
+    }
+    if ($newManifest.installer.Contains("ReleaseDate"))
+    {
+      $newManifest.installer["ReleaseDate"] = (Get-Date ([datetime]::Parse($releaseDate)) -f "yyyy-MM-dd")
+    }
+  }
+  else
+  {
+    if ($newManifest.singleton.Contains("ReleaseNotes") -or $newManifest.singleton.Contains("ReleaseNotesUrl") -or $newManifest.singleton.Contains("ReleaseDate"))
+    {
+      Write-Host -ForegroundColor Yellow "Warning! Something about the ReleaseNotes was set in the previous manifest. Please manually correct it."
+    }
+    if ($newManifest.singleton.Contains("ReleaseDate"))
+    {
+      $newManifest.singleton["ReleaseDate"] = (Get-Date ([datetime]::Parse($releaseDate)) -f "yyyy-MM-dd")
+    }
+  }
+
   # Now let's get these back to YAML.
   $path = ".\" + $newVersion + "\"
   New-Item -Type Directory $path -Force | Out-Null
