@@ -532,7 +532,9 @@ function Update-WinGetManifest {
     [Parameter(HelpMessage = "Check the applicable metadata values against the ARP table.")]
     [switch] $metadataCheck,
     [Parameter(HelpMessage = "The release date for this manifest (default: today")]
-    [string] $releaseDate = (Get-Date -f "yyyy-MM-dd")
+    [string] $releaseDate = (Get-Date -f "yyyy-MM-dd"),
+    [Parameter(HelpMessage = "Remove the old manifest and replace it with this one.")]
+    [switch] $update
   )
   # Just checking to ensure Carbon is available.
   Import-Module 'Carbon'
@@ -673,7 +675,13 @@ function Update-WinGetManifest {
     # }
     # Get Product Code if necessary
     if (($i.Contains("ProductCode") -Or ($productCode))) {
-      $i.ProductCode = '{' + (((Get-CMsi $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
+      try {
+        $i.ProductCode = '{' + (((Get-CMsi $env:TEMP\installer).ProductCode).ToString()).ToUpper() + '}'
+      }
+      catch {
+        Write-Host -ForegroundColor Red "The file doesn't look to be an MSI but has a ProductCode. Please manually verify the ProductCode to make sure it is correct."
+        $i.ProductCode = $i.ProductCode -replace $oldVersion, $newVersion
+      }
     }
   }
   # put the new installers array in the right place.
@@ -783,7 +791,13 @@ function Update-WinGetManifest {
     if ($testSuccess) {
       Write-Host "Manifest successfully installed in Windows Sandbox!"
       if ($commit) {
-        New-WinGetCommit $path
+        if ($update)
+        {
+          New-WinGetCommit $path -update $oldManifestFolder
+        }
+        else {
+          New-WinGetCommit $path
+        }
       }
       return $true
     }
@@ -927,7 +941,9 @@ function New-WinGetCommit {
     [Parameter(HelpMessage = "Use the currently checked out branch, instead of making a new one.")]
     [switch] $currentBranch,
     [Parameter(HelpMessage = "The commit message, if you don't want the automatically generated one.")]
-    [string] $customMessage
+    [string] $customMessage,
+    [Parameter(HelpMessage = "Update this manifest with the new one (delete the old one).")]
+    [string] $update
   )
   $ErrorActionPreference = "Stop"
   if (Test-Path -Path $manifest -PathType Leaf) {
@@ -949,7 +965,12 @@ function New-WinGetCommit {
     }
   }
   if ([string]::IsNullOrEmpty($customMessage) -or [string]::IsNullOrWhiteSpace($customMessage)) {
-    $commitMessage = "Added " + $content.PackageName + " version " + $content.PackageVersion + "."
+    if ([string]::IsNullOrEmpty($update)) {
+      $commitMessage = "Added " + $content.PackageName + " version " + $content.PackageVersion + "."
+    }
+    else {
+      $commitMessage = "Updated " + $content.PackageName + " to version " + $content.PackageVersion + "."
+    }
   }
   else {
     $commitMessage = $customMessage
@@ -964,6 +985,14 @@ function New-WinGetCommit {
     }
   }
   git add "$manifest" | Out-Null
+  if (-Not [string]::IsNullOrEmpty($update))
+  {
+    git rm -r $update | Out-Null
+    if ($LASTEXITCODE -ne 0)
+    {
+      throw "Delete failed."
+    }
+  }
   git commit -m $commitMessage | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "Commit failed."
