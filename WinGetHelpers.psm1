@@ -943,7 +943,9 @@ function New-WinGetCommit {
     [Parameter(HelpMessage = "The commit message, if you don't want the automatically generated one.")]
     [string] $customMessage,
     [Parameter(HelpMessage = "Update this manifest with the new one (delete the old one).")]
-    [string] $update
+    [string] $update,
+    [Parameter(HelpMessage = "Remove this manifest.")]
+    [switch] $remove
   )
   $ErrorActionPreference = "Stop"
   if (Test-Path -Path $manifest -PathType Leaf) {
@@ -965,9 +967,14 @@ function New-WinGetCommit {
     }
   }
   if ([string]::IsNullOrEmpty($customMessage) -or [string]::IsNullOrWhiteSpace($customMessage)) {
-    if ([string]::IsNullOrEmpty($update)) {
+    if($remove)
+    {
+      $commitMessage = "Removed non-working manifest for " + $content.PackageName + " version " + $content.PackageVersion + "."
+    }
+    elseif ([string]::IsNullOrEmpty($update)) {
       $commitMessage = "Added " + $content.PackageName + " version " + $content.PackageVersion + "."
     }
+    
     else {
       $commitMessage = "Updated " + $content.PackageName + " to version " + $content.PackageVersion + "."
     }
@@ -977,6 +984,10 @@ function New-WinGetCommit {
   }
   if (-Not $currentBranch) {
     $branchName = $content.PackageIdentifier + "-" + $content.PackageVersion
+    if ($remove)
+    {
+      $branchName += "-remove"
+    }
     git fetch --all | Out-Null
     git checkout -b "$branchName" upstream/master | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -984,7 +995,16 @@ function New-WinGetCommit {
       git checkout "$branchName"
     }
   }
-  git add "$manifest" | Out-Null
+  if ($remove) {
+    git rm -r "$manifest" | Out-Null
+    if ($LASTEXITCODE -ne 0)
+    {
+      throw "Delete failed."
+    }
+  }
+  else {
+    git add "$manifest" | Out-Null
+  }
   if (-Not [string]::IsNullOrEmpty($update))
   {
     git rm -r $update | Out-Null
