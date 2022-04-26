@@ -683,6 +683,10 @@ function Update-WinGetManifest {
         $i.ProductCode = $i.ProductCode -replace $oldVersion, $newVersion
       }
     }
+    if ($i.InstallerType -eq "msix")
+    {
+      $i.SignatureSha256 = (winget hash -m $env:TEMP\installer | ConvertFrom-Yaml).SignatureSha256
+    }
   }
   # put the new installers array in the right place.
   if ($type -eq "multifile") {
